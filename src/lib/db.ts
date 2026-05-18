@@ -1,0 +1,27 @@
+import Dexie, { type Table } from 'dexie';
+
+export type Tier = 'library' | 'shortlist' | 'active';
+
+export interface Item {
+	id?: number;
+	name: string;
+	category: string;
+	tags: string[];
+	inShortlist: 0 | 1;
+	inActive: 0 | 1;
+	createdAt: number;
+	updatedAt: number;
+}
+
+class ListsDB extends Dexie {
+	items!: Table<Item, number>;
+
+	constructor() {
+		super('lists');
+		this.version(1).stores({
+			items: '++id, name, category, inShortlist, inActive, createdAt, updatedAt, *tags'
+		});
+	}
+}
+
+export const db = new ListsDB();
