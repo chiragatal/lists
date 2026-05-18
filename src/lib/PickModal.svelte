@@ -1,7 +1,8 @@
 <script lang="ts">
 	import type { Item, Tier } from './db';
+	import { setItemTier, tierOf } from './store.svelte';
 	import { tierColorClass } from './tier';
-	import { Dices, Pencil, X } from './icons';
+	import { Bookmark, Check, Crosshair, Dices, Pencil, X } from './icons';
 
 	type Props = {
 		open: boolean;
@@ -33,7 +34,6 @@
 		}
 		rolling = true;
 		const final = pool[Math.floor(Math.random() * pool.length)];
-		// brief spin: flash through a handful of random items before settling
 		let i = 0;
 		const interval = setInterval(() => {
 			pick = pool[Math.floor(Math.random() * pool.length)];
@@ -46,6 +46,15 @@
 			}
 		}, 70);
 	}
+
+	async function moveTo(next: Tier) {
+		if (!pick?.id) return;
+		await setItemTier(pick.id, next);
+		// Refresh the local pick so the in-modal current state reflects the new tier
+		pick = { ...pick, inShortlist: next === 'shortlist' ? 1 : 0, inActive: next === 'active' ? 1 : 0 };
+	}
+
+	const pickCurrent = $derived(pick ? tierOf(pick) : 'library');
 </script>
 
 {#if open}
@@ -108,6 +117,81 @@
 							{/each}
 						</div>
 					{/if}
+
+					<!-- Move actions, parallel to ItemCard logic -->
+					<div class="mt-5 flex items-center justify-center gap-1.5">
+						{#if tier === 'active'}
+							<button
+								type="button"
+								onclick={() => moveTo('shortlist')}
+								class="move-btn"
+								title="Move to Shortlist"
+								aria-label="Move to Shortlist"
+							>
+								<Bookmark size={14} strokeWidth={1.5} />
+								<span>Shortlist</span>
+							</button>
+							<button
+								type="button"
+								onclick={() => moveTo('library')}
+								class="move-btn"
+								title="Done — back to Library"
+								aria-label="Mark done"
+							>
+								<Check size={14} strokeWidth={1.75} />
+								<span>Done</span>
+							</button>
+						{:else if tier === 'shortlist'}
+							<button
+								type="button"
+								onclick={() => moveTo('active')}
+								class="move-btn"
+								title="Move to Active"
+								aria-label="Move to Active"
+							>
+								<Crosshair size={14} strokeWidth={1.5} />
+								<span>Active</span>
+							</button>
+							<button
+								type="button"
+								onclick={() => moveTo('library')}
+								class="move-btn"
+								title="Done — back to Library"
+								aria-label="Mark done"
+							>
+								<Check size={14} strokeWidth={1.75} />
+								<span>Done</span>
+							</button>
+						{:else}
+							<button
+								type="button"
+								onclick={() => moveTo(pickCurrent === 'shortlist' ? 'library' : 'shortlist')}
+								class="move-btn"
+								class:on-shortlist={pickCurrent === 'shortlist'}
+								title={pickCurrent === 'shortlist' ? 'Remove from Shortlist' : 'Move to Shortlist'}
+								aria-label="Toggle shortlist"
+							>
+								<Bookmark
+									size={14}
+									strokeWidth={1.5}
+									fill={pickCurrent === 'shortlist' ? 'var(--color-amber)' : 'none'}
+								/>
+								<span>Shortlist</span>
+							</button>
+							<button
+								type="button"
+								onclick={() => moveTo(pickCurrent === 'active' ? 'library' : 'active')}
+								class="move-btn"
+								class:on-active={pickCurrent === 'active'}
+								title={pickCurrent === 'active' ? 'Remove from Active' : 'Move to Active'}
+								aria-label="Toggle active"
+							>
+								<Crosshair size={14} strokeWidth={1.5} />
+								<span>Active</span>
+							</button>
+						{/if}
+					</div>
+
 					<p
 						class="mt-5 font-mono text-[9px] tracking-[0.22em] text-[var(--color-faint)] uppercase"
 					>
@@ -120,7 +204,9 @@
 				{/if}
 			</div>
 
-			<footer class="grid grid-cols-2 gap-1.5 border-t border-[var(--color-hairline)] bg-[var(--color-paper-2)] p-3">
+			<footer
+				class="grid grid-cols-2 gap-1.5 border-t border-[var(--color-hairline)] bg-[var(--color-paper-2)] p-3"
+			>
 				<button
 					type="button"
 					onclick={doPick}
@@ -145,3 +231,35 @@
 		</div>
 	</div>
 {/if}
+
+<style>
+	.move-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		padding: 6px 10px;
+		border-radius: 9999px;
+		border: 1px solid var(--color-hairline);
+		background: var(--color-paper-2);
+		color: var(--color-muted);
+		font-family: var(--font-mono);
+		font-size: 10px;
+		letter-spacing: 0.14em;
+		text-transform: uppercase;
+		transition: color 200ms, border-color 200ms, background 200ms;
+	}
+	.move-btn:hover {
+		color: var(--color-text-bright);
+		border-color: var(--color-hairline-strong);
+	}
+	.move-btn.on-shortlist {
+		border-color: var(--color-amber);
+		color: var(--color-amber);
+		background: color-mix(in oklab, var(--color-amber) 10%, var(--color-paper-2));
+	}
+	.move-btn.on-active {
+		border-color: var(--color-emerald);
+		color: var(--color-emerald);
+		background: color-mix(in oklab, var(--color-emerald) 10%, var(--color-paper-2));
+	}
+</style>
