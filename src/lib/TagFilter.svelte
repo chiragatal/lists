@@ -1,15 +1,19 @@
 <script lang="ts">
 	import { X } from './icons';
 
+	export type TagMatchMode = 'all' | 'any';
+
 	type Props = {
 		open: boolean;
 		allTags: { tag: string; count: number }[];
 		selected: string[];
+		mode: TagMatchMode;
 		onChange: (next: string[]) => void;
+		onModeChange: (m: TagMatchMode) => void;
 		onClose: () => void;
 	};
 
-	let { open, allTags, selected, onChange, onClose }: Props = $props();
+	let { open, allTags, selected, mode, onChange, onModeChange, onClose }: Props = $props();
 
 	function toggle(tag: string) {
 		if (selected.includes(tag)) onChange(selected.filter((t) => t !== tag));
@@ -34,9 +38,11 @@
 			aria-modal="true"
 			aria-label="Filter by tags"
 		>
-			<header class="flex items-center justify-between border-b border-[var(--color-hairline)] px-5 py-4">
+			<header
+				class="flex items-center justify-between border-b border-[var(--color-hairline)] px-5 py-4"
+			>
 				<div>
-					<p class="font-display text-lg leading-none">Tags</p>
+					<p class="font-display-soft text-lg leading-none">Tags</p>
 					<p class="mt-1 font-mono text-[10px] tracking-wide text-[var(--color-faint)] uppercase">
 						{selected.length} of {allTags.length} selected
 					</p>
@@ -61,7 +67,40 @@
 					</button>
 				</div>
 			</header>
-			<div class="max-h-[60vh] overflow-y-auto p-5 scrollbar-thin">
+
+			<!-- All/Any mode toggle -->
+			<div class="border-b border-[var(--color-hairline)] px-5 py-3">
+				<div class="mb-1.5 flex items-baseline justify-between">
+					<span
+						class="font-mono text-[10px] tracking-[0.18em] text-[var(--color-faint)] uppercase"
+					>
+						Match
+					</span>
+					<span class="font-mono text-[10px] text-[var(--color-faint)]">
+						{mode === 'all' ? 'every selected tag' : 'any tag, ranked by hits'}
+					</span>
+				</div>
+				<div class="flex gap-1.5">
+					<button
+						type="button"
+						onclick={() => onModeChange('all')}
+						class="flex-1 rounded-md border px-2.5 py-1.5 font-mono text-[11px] tracking-wide uppercase transition-colors"
+						class:mode-on={mode === 'all'}
+					>
+						All
+					</button>
+					<button
+						type="button"
+						onclick={() => onModeChange('any')}
+						class="flex-1 rounded-md border px-2.5 py-1.5 font-mono text-[11px] tracking-wide uppercase transition-colors"
+						class:mode-on={mode === 'any'}
+					>
+						Any
+					</button>
+				</div>
+			</div>
+
+			<div class="max-h-[50vh] overflow-y-auto p-5 scrollbar-thin">
 				{#if allTags.length === 0}
 					<p class="py-8 text-center text-sm text-[var(--color-muted)]">
 						No tags yet on items in this view.
@@ -108,5 +147,10 @@
 	}
 	button.on :global(span:last-child) {
 		color: var(--tier-color, var(--color-emerald));
+	}
+	.mode-on {
+		border-color: var(--tier-color, var(--color-emerald)) !important;
+		background: color-mix(in oklab, var(--tier-color, var(--color-emerald)) 14%, transparent);
+		color: var(--color-text-bright);
 	}
 </style>

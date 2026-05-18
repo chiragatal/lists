@@ -22,6 +22,7 @@
 	let name = $state('');
 	let category = $state('');
 	let tagsText = $state('');
+	let notes = $state('');
 	let placement = $state<Tier>('library');
 	let categories = $state<string[]>([]);
 	let tagSuggestions = $state<string[]>([]);
@@ -33,11 +34,13 @@
 			name = item.name;
 			category = item.category;
 			tagsText = item.tags.join(', ');
+			notes = item.notes ?? '';
 			placement = tierOf(item);
 		} else {
 			name = '';
 			category = '';
 			tagsText = '';
+			notes = '';
 			placement = defaultTier;
 		}
 		allCategories().then((c) => (categories = c));
@@ -75,16 +78,18 @@
 		const c = category.trim();
 		if (!n || !c) return;
 		const tags = parseTags(tagsText);
+		const trimmedNotes = notes.trim();
 		if (item?.id != null) {
 			await updateItem(item.id, {
 				name: n,
 				category: c,
 				tags,
+				notes: trimmedNotes || undefined,
 				inShortlist: placement === 'shortlist' ? 1 : 0,
 				inActive: placement === 'active' ? 1 : 0
 			});
 		} else {
-			await addItem({ name: n, category: c, tags, tier: placement });
+			await addItem({ name: n, category: c, tags, notes: trimmedNotes, tier: placement });
 		}
 		onClose();
 	}
@@ -213,6 +218,20 @@
 						</div>
 					{/if}
 				</div>
+
+				<label class="block">
+					<span
+						class="mb-1.5 block font-mono text-[10px] tracking-[0.18em] text-[var(--color-faint)] uppercase"
+					>
+						Notes <span class="text-[var(--color-faint)] normal-case">— optional</span>
+					</span>
+					<textarea
+						bind:value={notes}
+						rows="3"
+						placeholder="Why, ingredients, link, mood…"
+						class="block w-full resize-none rounded-md border border-[var(--color-hairline)] bg-[var(--color-paper-2)] px-2.5 py-2 text-sm leading-relaxed text-[var(--color-text)] outline-none placeholder:text-[var(--color-faint)] focus:border-[var(--color-emerald)]"
+					></textarea>
+				</label>
 
 				<div>
 					<span

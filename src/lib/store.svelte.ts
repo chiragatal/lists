@@ -39,6 +39,7 @@ export async function addItem(input: {
 	name: string;
 	category: string;
 	tags: string[];
+	notes?: string;
 	tier: Tier;
 }): Promise<number> {
 	const now = Date.now();
@@ -46,6 +47,7 @@ export async function addItem(input: {
 		name: input.name.trim(),
 		category: input.category.trim(),
 		tags: input.tags.map((t) => t.trim()).filter(Boolean),
+		notes: input.notes?.trim() || undefined,
 		inShortlist: input.tier === 'shortlist' ? 1 : 0,
 		inActive: input.tier === 'active' ? 1 : 0,
 		sortOrder: await nextSortOrder(),
@@ -130,6 +132,7 @@ export async function importAll(json: string, mode: 'replace' | 'merge' = 'repla
 			name: String(raw.name ?? '').trim() || 'Untitled',
 			category: String(raw.category ?? '').trim(),
 			tags: Array.isArray(raw.tags) ? raw.tags.map(String) : [],
+			notes: typeof raw.notes === 'string' ? raw.notes : undefined,
 			inShortlist: inShortlist as 0 | 1,
 			inActive: inActive as 0 | 1,
 			sortOrder: typeof raw.sortOrder === 'number' ? raw.sortOrder : idx * 1000,

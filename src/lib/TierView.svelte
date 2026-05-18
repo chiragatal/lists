@@ -7,12 +7,25 @@
 	import { db } from './db';
 	import { itemsByTier, reorderItems } from './store.svelte';
 	import { tierMeta, tierColorClass } from './tier';
-	import { Plus, Search, Settings, X, LayoutList, Tag, Bookmark, Library } from './icons';
+	import {
+		Plus,
+		Search,
+		Settings,
+		X,
+		LayoutList,
+		Tag,
+		Bookmark,
+		Library,
+		Dices
+	} from './icons';
 	import ItemEditor from './ItemEditor.svelte';
 	import ItemCard from './ItemCard.svelte';
 	import CategoryChips from './CategoryChips.svelte';
 	import TagFilter from './TagFilter.svelte';
+
+	type TagMatchMode = 'all' | 'any';
 	import SettingsSheet from './SettingsSheet.svelte';
+	import PickModal from './PickModal.svelte';
 
 	type Props = { tier: Tier };
 	let { tier }: Props = $props();
@@ -24,11 +37,13 @@
 	let query = $state('');
 	let categoryFilter = $state('');
 	let selectedTags = $state<string[]>([]);
+	let tagMatchMode = $state<TagMatchMode>('all');
 	let groupingMode = $state<'category-tag' | 'category' | 'none'>('category-tag');
 	let editorOpen = $state(false);
 	let editing = $state<Item | null>(null);
 	let tagFilterOpen = $state(false);
 	let settingsOpen = $state(false);
+	let pickOpen = $state(false);
 	let searchFocused = $state(false);
 
 	let totalCount = $state(0);
@@ -43,21 +58,41 @@
 		return () => sub.unsubscribe();
 	});
 
+	function tagHits(it: Item): number {
+		if (!selectedTags.length) return 0;
+		let n = 0;
+		for (const t of selectedTags) if (it.tags.includes(t)) n++;
+		return n;
+	}
+
 	const filtered = $derived.by(() => {
 		const q = query.trim().toLowerCase();
-		return items.filter((it) => {
+		const matched = items.filter((it) => {
 			if (q) {
 				if (
 					!it.name.toLowerCase().includes(q) &&
 					!it.category.toLowerCase().includes(q) &&
-					!it.tags.some((t) => t.toLowerCase().includes(q))
+					!it.tags.some((t) => t.toLowerCase().includes(q)) &&
+					!(it.notes ?? '').toLowerCase().includes(q)
 				)
 					return false;
 			}
 			if (categoryFilter && it.category !== categoryFilter) return false;
-			if (selectedTags.length && !selectedTags.every((t) => it.tags.includes(t))) return false;
+			if (selectedTags.length) {
+				if (tagMatchMode === 'all') {
+					if (!selectedTags.every((t) => it.tags.includes(t))) return false;
+				} else {
+					if (!selectedTags.some((t) => it.tags.includes(t))) return false;
+				}
+			}
 			return true;
 		});
+
+		// When matching "any" with multiple tags, items with more hits rank first
+		if (tagMatchMode === 'any' && selectedTags.length > 1) {
+			return [...matched].sort((a, b) => tagHits(b) - tagHits(a));
+		}
+		return matched;
 	});
 
 	const tagCounts = $derived.by(() => {
@@ -83,16 +118,21 @@
 			byCategory.get(k)!.push(it);
 		}
 
+		const ranking = tagMatchMode === 'any' && selectedTags.length > 1;
+
 		return [...byCategory.entries()]
 			.sort(([a], [b]) => a.localeCompare(b))
-			.map(([category, list]) => ({
-				category,
-				items: list,
-				subgroups:
-					groupingMode === 'category-tag'
-						? subgroupByCommonTag(list)
-						: [{ tag: null, items: list }]
-			}));
+			.map(([category, list]) => {
+				const ordered = ranking ? [...list].sort((a, b) => tagHits(b) - tagHits(a)) : list;
+				return {
+					category,
+					items: ordered,
+					subgroups:
+						groupingMode === 'category-tag'
+							? subgroupByCommonTag(ordered)
+							: [{ tag: null, items: ordered }]
+				};
+			});
 	});
 
 	function subgroupByCommonTag(list: Item[]): Subgroup[] {
@@ -303,6 +343,16 @@
 			>
 				<LayoutList size={15} strokeWidth={1.5} />
 			</button>
+			<button
+				type="button"
+				onclick={() => (pickOpen = true)}
+				disabled={filtered.length === 0}
+				class="icon-btn"
+				aria-label="Pick one for me"
+				title="Pick one for me"
+			>
+				<Dices size={15} strokeWidth={1.5} />
+			</button>
 		</div>
 
 		<!-- Quick category filters -->
@@ -313,11 +363,14 @@
 		<!-- Selected tag pills -->
 		{#if selectedTags.length > 0}
 			<div class="mb-3 flex flex-wrap items-center gap-1.5" transition:fade={{ duration: 120 }}>
-				<span
-					class="font-mono text-[10px] tracking-[0.16em] text-[var(--color-faint)] uppercase"
+				<button
+					type="button"
+					onclick={() => (tagFilterOpen = true)}
+					class="font-mono text-[10px] tracking-[0.16em] text-[var(--color-faint)] uppercase hover:text-[var(--color-text)]"
 				>
-					Tags
-				</span>
+					Tags ·
+					<span class="text-[var(--tier-color)]">{tagMatchMode}</span>
+				</button>
 				{#each selectedTags as t}
 					<button
 						type="button"
@@ -499,8 +552,21 @@
 	open={tagFilterOpen}
 	allTags={tagCounts}
 	selected={selectedTags}
+	mode={tagMatchMode}
 	onChange={(next) => (selectedTags = next)}
+	onModeChange={(m) => (tagMatchMode = m)}
 	onClose={() => (tagFilterOpen = false)}
+/>
+
+<PickModal
+	open={pickOpen}
+	pool={filtered}
+	tier={tier}
+	onClose={() => (pickOpen = false)}
+	onEdit={(it) => {
+		pickOpen = false;
+		openEdit(it);
+	}}
 />
 
 <SettingsSheet open={settingsOpen} onClose={() => (settingsOpen = false)} />

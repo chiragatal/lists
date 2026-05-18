@@ -7,6 +7,7 @@ export interface Item {
 	name: string;
 	category: string;
 	tags: string[];
+	notes?: string;
 	inShortlist: 0 | 1;
 	inActive: 0 | 1;
 	sortOrder: number;

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Item, Tier } from './db';
 	import { setItemTier, tierOf } from './store.svelte';
-	import { Bookmark, Check, Crosshair, GripVertical } from './icons';
+	import { Bookmark, Check, Crosshair, GripVertical, StickyNote } from './icons';
 
 	type Props = {
 		item: Item;
@@ -54,6 +54,15 @@
 			>
 				{item.name}
 			</button>
+			{#if item.notes}
+				<span
+					class="note-mark shrink-0 text-[var(--color-faint)]"
+					title="Has notes"
+					aria-label="Has notes"
+				>
+					<StickyNote size={11} strokeWidth={1.5} />
+				</span>
+			{/if}
 			{#if tier === 'library' && current !== 'library'}
 				<span
 					class="state-badge font-mono text-[8px] tracking-[0.18em] uppercase"
