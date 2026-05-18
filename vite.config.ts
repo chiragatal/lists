@@ -13,8 +13,8 @@ export default defineConfig({
 				name: 'Lists',
 				short_name: 'Lists',
 				description: 'Library / Shortlist / Active — figure out what to do.',
-				theme_color: '#0f172a',
-				background_color: '#0f172a',
+				theme_color: '#0c0e13',
+				background_color: '#0c0e13',
 				display: 'standalone',
 				start_url: '/',
 				icons: [

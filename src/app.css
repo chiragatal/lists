@@ -1,24 +1,169 @@
 @import 'tailwindcss';
 
 @theme {
-	--color-bg: #0f172a;
-	--color-surface: #1e293b;
-	--color-surface-2: #334155;
-	--color-border: #475569;
-	--color-text: #f1f5f9;
-	--color-muted: #94a3b8;
-	--color-accent: #38bdf8;
+	/* Cool, modern dark — slate ink with three tier accents that read as
+	   states rather than periods: emerald = doing, amber = considering,
+	   slate = resting. */
+	--color-ink-deep: #07080b;
+	--color-ink: #0c0e13;
+	--color-paper: #131620;
+	--color-paper-2: #1a1e2a;
+	--color-paper-3: #232836;
+	--color-hairline: #242a36;
+	--color-hairline-strong: #353c4c;
+
+	--color-text: #e3e6ee;
+	--color-text-bright: #f4f6fa;
+	--color-muted: #8d94a3;
+	--color-faint: #565d6c;
+
+	/* Active — committed, present */
+	--color-emerald: #4ade80;
+	--color-emerald-bright: #86efac;
+	--color-emerald-deep: #1e6b3a;
+
+	/* Shortlist — under consideration */
+	--color-amber: #fbbf24;
+	--color-amber-bright: #fcd34d;
+	--color-amber-deep: #855107;
+
+	/* Library — at rest, archival */
+	--color-slate: #94a3b8;
+	--color-slate-bright: #cbd5e1;
+	--color-slate-deep: #475569;
+
+	--color-danger: #f87171;
+	--color-success: #4ade80;
+
+	--font-display:
+		'Mona Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+		'Helvetica Neue', Arial, sans-serif;
+	--font-serif:
+		'Fraunces', ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif;
+	--font-body:
+		'Mona Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+		'Helvetica Neue', Arial, sans-serif;
+	--font-mono:
+		'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
-html,
-body {
-	background: var(--color-bg);
-	color: var(--color-text);
-	min-height: 100vh;
+@layer base {
+	html,
+	body {
+		background:
+			radial-gradient(ellipse 90% 50% at 50% -10%, #161a26 0%, transparent 60%),
+			var(--color-ink);
+		color: var(--color-text);
+		min-height: 100vh;
+		font-family: var(--font-body);
+		font-variation-settings: 'wght' 420;
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+		text-rendering: optimizeLegibility;
+	}
+
+	::selection {
+		background: color-mix(in oklab, var(--color-emerald) 50%, transparent);
+		color: var(--color-text-bright);
+	}
+
+	*:focus-visible {
+		outline: 1px solid var(--color-emerald);
+		outline-offset: 2px;
+		border-radius: 2px;
+	}
+
+	button,
+	input,
+	select,
+	textarea {
+		font-family: inherit;
+	}
+
+	input[type='search']::-webkit-search-cancel-button {
+		appearance: none;
+	}
 }
 
-body {
-	font-family:
-		ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
-		sans-serif;
+@utility font-display {
+	font-family: var(--font-display);
+	font-variation-settings: 'wght' 780, 'wdth' 96;
+	letter-spacing: -0.035em;
+}
+
+@utility font-display-soft {
+	font-family: var(--font-display);
+	font-variation-settings: 'wght' 600, 'wdth' 100;
+	letter-spacing: -0.022em;
+}
+
+@utility font-serif {
+	font-family: var(--font-serif);
+	font-feature-settings: 'ss01', 'liga';
+	font-variation-settings: 'opsz' 24, 'SOFT' 30, 'wght' 460;
+	letter-spacing: -0.01em;
+}
+
+@utility font-mono {
+	font-family: var(--font-mono);
+	font-feature-settings: 'zero', 'cv02';
+	font-variation-settings: 'wght' 450;
+}
+
+@utility tier-active {
+	--tier-color: var(--color-emerald);
+	--tier-color-bright: var(--color-emerald-bright);
+	--tier-color-deep: var(--color-emerald-deep);
+}
+
+@utility tier-shortlist {
+	--tier-color: var(--color-amber);
+	--tier-color-bright: var(--color-amber-bright);
+	--tier-color-deep: var(--color-amber-deep);
+}
+
+@utility tier-library {
+	--tier-color: var(--color-slate);
+	--tier-color-bright: var(--color-slate-bright);
+	--tier-color-deep: var(--color-slate-deep);
+}
+
+@utility hairline {
+	border-color: var(--color-hairline);
+}
+
+@utility hairline-strong {
+	border-color: var(--color-hairline-strong);
+}
+
+@utility paper {
+	background: var(--color-paper);
+}
+
+@utility paper-2 {
+	background: var(--color-paper-2);
+}
+
+@utility scrollbar-thin {
+	scrollbar-width: thin;
+	scrollbar-color: var(--color-hairline-strong) transparent;
+}
+
+@utility scrollbar-hide {
+	scrollbar-width: none;
+	&::-webkit-scrollbar {
+		display: none;
+	}
+}
+
+/* svelte-dnd-action visual feedback */
+:global(.dnd-shadow-item) {
+	visibility: hidden;
+}
+:global(.dnd-drag-item) {
+	box-shadow:
+		0 12px 32px -8px rgba(0, 0, 0, 0.7),
+		0 0 0 1px var(--color-emerald);
+	opacity: 0.98;
+	transform: rotate(-0.4deg);
 }

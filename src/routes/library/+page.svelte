@@ -3,7 +3,7 @@
 </script>
 
 <svelte:head>
-	<title>Shortlist · Lists</title>
+	<title>Library · Lists</title>
 </svelte:head>
 
-<TierView tier="shortlist" />
+<TierView tier="library" />

@@ -1,6 +1,14 @@
 <script lang="ts">
 	import type { Item, Tier } from './db';
-	import { addItem, updateItem, deleteItem, allCategories, tagsForCategory } from './store.svelte';
+	import {
+		addItem,
+		updateItem,
+		deleteItem,
+		allCategories,
+		tagsForCategory,
+		tierOf
+	} from './store.svelte';
+	import { Trash2, X, Bookmark, Crosshair, Library } from './icons';
 
 	type Props = {
 		open: boolean;
@@ -14,10 +22,10 @@
 	let name = $state('');
 	let category = $state('');
 	let tagsText = $state('');
-	let inShortlist = $state(false);
-	let inActive = $state(false);
+	let placement = $state<Tier>('library');
 	let categories = $state<string[]>([]);
 	let tagSuggestions = $state<string[]>([]);
+	let nameInput = $state<HTMLInputElement | null>(null);
 
 	$effect(() => {
 		if (!open) return;
@@ -25,16 +33,15 @@
 			name = item.name;
 			category = item.category;
 			tagsText = item.tags.join(', ');
-			inShortlist = item.inShortlist === 1;
-			inActive = item.inActive === 1;
+			placement = tierOf(item);
 		} else {
 			name = '';
 			category = '';
 			tagsText = '';
-			inShortlist = defaultTier === 'shortlist' || defaultTier === 'active';
-			inActive = defaultTier === 'active';
+			placement = defaultTier;
 		}
 		allCategories().then((c) => (categories = c));
+		queueMicrotask(() => nameInput?.focus());
 	});
 
 	$effect(() => {
@@ -53,10 +60,14 @@
 			.filter(Boolean);
 	}
 
+	const currentTags = $derived(parseTags(tagsText));
+
 	function addTagSuggestion(t: string) {
-		const current = parseTags(tagsText);
-		if (current.includes(t)) return;
-		tagsText = [...current, t].join(', ');
+		if (currentTags.includes(t)) {
+			tagsText = currentTags.filter((x) => x !== t).join(', ');
+		} else {
+			tagsText = [...currentTags, t].join(', ');
+		}
 	}
 
 	async function save() {
@@ -69,142 +80,271 @@
 				name: n,
 				category: c,
 				tags,
-				inShortlist: inShortlist ? 1 : 0,
-				inActive: inActive && inShortlist ? 1 : 0
+				inShortlist: placement === 'shortlist' ? 1 : 0,
+				inActive: placement === 'active' ? 1 : 0
 			});
 		} else {
-			const tier: Tier = inActive ? 'active' : inShortlist ? 'shortlist' : 'library';
-			await addItem({ name: n, category: c, tags, tier });
+			await addItem({ name: n, category: c, tags, tier: placement });
 		}
 		onClose();
 	}
 
 	async function remove() {
-		if (item?.id != null && confirm('Delete this item?')) {
+		if (item?.id != null && confirm('Delete this item permanently?')) {
 			await deleteItem(item.id);
 			onClose();
 		}
 	}
+
+	function handleKey(e: KeyboardEvent) {
+		if (e.key === 'Escape') onClose();
+		else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) save();
+	}
+
+	const placements: { id: Tier; label: string; hint: string; Icon: typeof Library }[] = [
+		{ id: 'library', label: 'Library', hint: 'At rest', Icon: Library },
+		{ id: 'shortlist', label: 'Shortlist', hint: 'Considering', Icon: Bookmark },
+		{ id: 'active', label: 'Active', hint: 'Doing now', Icon: Crosshair }
+	];
 </script>
+
+<svelte:window onkeydown={open ? handleKey : null} />
 
 {#if open}
 	<div
-		class="fixed inset-0 z-30 flex items-end justify-center bg-black/60 sm:items-center"
+		class="fixed inset-0 z-40 flex items-end justify-center bg-black/65 backdrop-blur-sm sm:items-center"
 		onclick={onClose}
 		role="presentation"
 	>
 		<div
-			class="w-full max-w-md rounded-t-2xl bg-[var(--color-surface)] p-5 shadow-2xl sm:rounded-2xl"
+			class="w-full max-w-md overflow-hidden rounded-t-2xl border border-[var(--color-hairline-strong)] bg-[var(--color-paper)] shadow-[0_-12px_40px_-8px_rgba(0,0,0,0.6)] sm:rounded-2xl"
 			onclick={(e) => e.stopPropagation()}
 			role="dialog"
 			aria-modal="true"
+			aria-labelledby="editor-title"
 		>
-			<h2 class="mb-4 text-lg font-semibold">
-				{item ? 'Edit item' : 'New item'}
-			</h2>
-
-			<label class="mb-3 block">
-				<span class="mb-1 block text-xs text-[var(--color-muted)]">Name</span>
-				<input
-					type="text"
-					bind:value={name}
-					class="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 outline-none focus:border-[var(--color-accent)]"
-					placeholder="e.g. Pasta carbonara"
-					autofocus
-				/>
-			</label>
-
-			<label class="mb-3 block">
-				<span class="mb-1 block text-xs text-[var(--color-muted)]">Category</span>
-				<input
-					type="text"
-					bind:value={category}
-					list="category-suggestions"
-					class="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 outline-none focus:border-[var(--color-accent)]"
-					placeholder="e.g. Cook"
-				/>
-				<datalist id="category-suggestions">
-					{#each categories as c}
-						<option value={c}></option>
-					{/each}
-				</datalist>
-			</label>
-
-			<label class="mb-2 block">
-				<span class="mb-1 block text-xs text-[var(--color-muted)]"
-					>Tags <span class="text-[var(--color-muted)]/70">(comma-separated)</span></span
-				>
-				<input
-					type="text"
-					bind:value={tagsText}
-					class="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 outline-none focus:border-[var(--color-accent)]"
-					placeholder="e.g. quick, italian, dinner"
-				/>
-			</label>
-
-			{#if tagSuggestions.length}
-				<div class="mb-3 flex flex-wrap gap-1.5">
-					{#each tagSuggestions as t}
-						<button
-							type="button"
-							onclick={() => addTagSuggestion(t)}
-							class="rounded-full border border-[var(--color-border)] px-2 py-0.5 text-xs text-[var(--color-muted)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
-						>
-							+ {t}
-						</button>
-					{/each}
+			<header
+				class="flex items-center justify-between border-b border-[var(--color-hairline)] px-5 py-4"
+			>
+				<div>
+					<p id="editor-title" class="font-display-soft text-lg leading-none">
+						{item ? 'Edit' : 'New entry'}
+					</p>
+					<p
+						class="mt-1 font-mono text-[10px] tracking-[0.18em] text-[var(--color-faint)] uppercase"
+					>
+						{item ? `#${item.id}` : 'Draft'}
+					</p>
 				</div>
-			{/if}
+				<button
+					type="button"
+					onclick={onClose}
+					class="-mr-1.5 rounded-md p-1.5 text-[var(--color-muted)] hover:text-[var(--color-text)]"
+					aria-label="Close"
+				>
+					<X size={18} strokeWidth={1.5} />
+				</button>
+			</header>
 
-			<div class="mb-5 flex flex-col gap-2 rounded-lg bg-[var(--color-bg)] p-3">
-				<label class="flex items-center gap-2 text-sm">
+			<div class="space-y-5 p-5">
+				<label class="block">
+					<span
+						class="mb-1.5 block font-mono text-[10px] tracking-[0.18em] text-[var(--color-faint)] uppercase"
+					>
+						Name
+					</span>
 					<input
-						type="checkbox"
-						bind:checked={inShortlist}
-						onchange={() => {
-							if (!inShortlist) inActive = false;
-						}}
+						bind:this={nameInput}
+						type="text"
+						bind:value={name}
+						placeholder="What is it?"
+						class="w-full border-0 border-b border-[var(--color-hairline-strong)] bg-transparent px-0 py-2 font-display-soft text-2xl text-[var(--color-text-bright)] outline-none placeholder:text-[var(--color-faint)] focus:border-[var(--color-emerald)]"
 					/>
-					<span>⭐ In Shortlist</span>
 				</label>
-				<label class="flex items-center gap-2 text-sm" class:opacity-50={!inShortlist}>
+
+				<label class="block">
+					<span
+						class="mb-1.5 block font-mono text-[10px] tracking-[0.18em] text-[var(--color-faint)] uppercase"
+					>
+						Category
+					</span>
 					<input
-						type="checkbox"
-						bind:checked={inActive}
-						disabled={!inShortlist}
-						onchange={() => {
-							if (inActive) inShortlist = true;
-						}}
+						type="text"
+						bind:value={category}
+						list="category-suggestions"
+						placeholder="Cook · Watch · Read · Build…"
+						class="w-full border-0 border-b border-[var(--color-hairline)] bg-transparent px-0 py-1.5 text-sm text-[var(--color-text-bright)] outline-none placeholder:text-[var(--color-faint)] focus:border-[var(--color-emerald)]"
 					/>
-					<span>🎯 In Active</span>
+					<datalist id="category-suggestions">
+						{#each categories as c}
+							<option value={c}></option>
+						{/each}
+					</datalist>
 				</label>
+
+				<div>
+					<div class="mb-1.5 flex items-baseline justify-between">
+						<span
+							class="font-mono text-[10px] tracking-[0.18em] text-[var(--color-faint)] uppercase"
+						>
+							Tags
+						</span>
+						<span class="font-mono text-[10px] text-[var(--color-faint)]">comma-separated</span>
+					</div>
+					<input
+						type="text"
+						bind:value={tagsText}
+						placeholder="quick, italian, weeknight"
+						class="w-full border-0 border-b border-[var(--color-hairline)] bg-transparent px-0 py-1.5 text-sm text-[var(--color-text-bright)] outline-none placeholder:text-[var(--color-faint)] focus:border-[var(--color-emerald)]"
+					/>
+					{#if tagSuggestions.length}
+						<div class="mt-3 flex flex-wrap gap-1">
+							{#each tagSuggestions as t}
+								{@const on = currentTags.includes(t)}
+								<button
+									type="button"
+									onclick={() => addTagSuggestion(t)}
+									class="suggest-chip"
+									class:on
+								>
+									{on ? '−' : '+'} {t}
+								</button>
+							{/each}
+						</div>
+					{/if}
+				</div>
+
+				<div>
+					<span
+						class="mb-2 block font-mono text-[10px] tracking-[0.18em] text-[var(--color-faint)] uppercase"
+					>
+						State
+					</span>
+					<div class="grid grid-cols-3 gap-1.5">
+						{#each placements as p}
+							<button
+								type="button"
+								onclick={() => (placement = p.id)}
+								class="placement-tile"
+								data-tier={p.id}
+								class:selected={placement === p.id}
+							>
+								<p.Icon size={16} strokeWidth={1.5} />
+								<span class="placement-label">{p.label}</span>
+								<span class="placement-hint">{p.hint}</span>
+							</button>
+						{/each}
+					</div>
+				</div>
 			</div>
 
-			<div class="flex items-center gap-2">
+			<footer
+				class="flex items-center justify-between gap-2 border-t border-[var(--color-hairline)] bg-[var(--color-paper-2)] px-5 py-3"
+			>
 				{#if item}
 					<button
+						type="button"
 						onclick={remove}
-						class="rounded-lg border border-red-500/40 px-3 py-2 text-sm text-red-300 hover:bg-red-500/10"
+						class="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-[var(--color-muted)] transition-colors hover:text-[var(--color-danger)]"
 					>
-						Delete
+						<Trash2 size={13} strokeWidth={1.5} /> Delete
 					</button>
+				{:else}
+					<span></span>
 				{/if}
-				<div class="ml-auto flex gap-2">
+				<div class="flex gap-2">
 					<button
+						type="button"
 						onclick={onClose}
-						class="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm"
+						class="rounded-md px-3 py-1.5 text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]"
 					>
 						Cancel
 					</button>
 					<button
+						type="button"
 						onclick={save}
 						disabled={!name.trim() || !category.trim()}
-						class="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-slate-900 disabled:opacity-50"
+						class="rounded-md bg-[var(--color-emerald)] px-4 py-1.5 text-xs font-semibold tracking-wide text-[var(--color-ink-deep)] uppercase transition-opacity hover:bg-[var(--color-emerald-bright)] disabled:opacity-30"
 					>
 						Save
 					</button>
 				</div>
-			</div>
+			</footer>
 		</div>
 	</div>
 {/if}
+
+<style>
+	.suggest-chip {
+		font-family: var(--font-mono);
+		font-size: 10px;
+		padding: 2px 8px;
+		border-radius: 9999px;
+		border: 1px solid var(--color-hairline);
+		color: var(--color-muted);
+		background: transparent;
+		transition: border-color 200ms, color 200ms, background 200ms;
+	}
+	.suggest-chip:hover {
+		border-color: var(--color-hairline-strong);
+		color: var(--color-text);
+	}
+	.suggest-chip.on {
+		border-color: var(--color-emerald);
+		color: var(--color-emerald);
+		background: color-mix(in oklab, var(--color-emerald) 14%, transparent);
+	}
+
+	.placement-tile {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 4px;
+		padding: 12px 12px 10px;
+		border-radius: 0.625rem;
+		border: 1px solid var(--color-hairline);
+		background: var(--color-paper-2);
+		color: var(--color-muted);
+		transition: border-color 200ms, color 200ms, background 200ms;
+		text-align: left;
+	}
+	.placement-tile:hover {
+		border-color: var(--color-hairline-strong);
+		color: var(--color-text);
+	}
+	.placement-label {
+		font-family: var(--font-display);
+		font-variation-settings: 'wght' 600;
+		letter-spacing: -0.01em;
+		font-size: 13px;
+		color: var(--color-text-bright);
+	}
+	.placement-hint {
+		font-family: var(--font-mono);
+		font-size: 9px;
+		letter-spacing: 0.16em;
+		text-transform: uppercase;
+		color: var(--color-faint);
+	}
+	.placement-tile.selected[data-tier='library'] {
+		border-color: var(--color-slate);
+		background: color-mix(in oklab, var(--color-slate) 10%, var(--color-paper-2));
+	}
+	.placement-tile.selected[data-tier='library'] .placement-hint {
+		color: var(--color-slate);
+	}
+	.placement-tile.selected[data-tier='shortlist'] {
+		border-color: var(--color-amber);
+		background: color-mix(in oklab, var(--color-amber) 10%, var(--color-paper-2));
+	}
+	.placement-tile.selected[data-tier='shortlist'] .placement-hint {
+		color: var(--color-amber);
+	}
+	.placement-tile.selected[data-tier='active'] {
+		border-color: var(--color-emerald);
+		background: color-mix(in oklab, var(--color-emerald) 10%, var(--color-paper-2));
+	}
+	.placement-tile.selected[data-tier='active'] .placement-hint {
+		color: var(--color-emerald);
+	}
+</style>
