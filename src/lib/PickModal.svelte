@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Item, Tier } from './db';
+	import { tierColorClass } from './tier';
 	import { Dices, Pencil, X } from './icons';
 
 	type Props = {
@@ -54,12 +55,13 @@
 		role="presentation"
 	>
 		<div
-			class="w-full max-w-sm overflow-hidden rounded-2xl border border-[var(--color-hairline-strong)] bg-[var(--color-paper)] shadow-[0_20px_60px_-12px_rgba(0,0,0,0.7)]"
+			class="w-full max-w-sm overflow-hidden rounded-2xl border border-[var(--color-hairline-strong)] bg-[var(--color-paper)] shadow-[0_20px_60px_-12px_rgba(0,0,0,0.7)] {tierColorClass(
+				tier
+			)}"
 			onclick={(e) => e.stopPropagation()}
 			role="dialog"
 			aria-modal="true"
 			aria-labelledby="pick-title"
-			data-tier={tier}
 		>
 			<header class="flex items-center justify-between border-b border-[var(--color-hairline)] px-5 py-3.5">
 				<div class="flex items-center gap-2">
@@ -105,11 +107,6 @@
 								</span>
 							{/each}
 						</div>
-					{/if}
-					{#if pick.notes}
-						<p class="mt-4 line-clamp-3 text-left text-[13px] leading-relaxed text-[var(--color-muted)]">
-							{pick.notes}
-						</p>
 					{/if}
 					<p
 						class="mt-5 font-mono text-[9px] tracking-[0.22em] text-[var(--color-faint)] uppercase"

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Item, Tier } from './db';
 	import { setItemTier, tierOf } from './store.svelte';
-	import { Bookmark, Check, Crosshair, GripVertical, StickyNote } from './icons';
+	import { Bookmark, Crosshair, GripVertical, StickyNote } from './icons';
 
 	type Props = {
 		item: Item;
@@ -93,26 +93,7 @@
 	</div>
 
 	<div class="flex shrink-0 items-center gap-1 pl-1">
-		{#if tier === 'active'}
-			<button
-				type="button"
-				onclick={go('shortlist')}
-				class="action-btn"
-				title="Move to Shortlist"
-				aria-label="Move to Shortlist"
-			>
-				<Bookmark size={15} strokeWidth={1.5} />
-			</button>
-			<button
-				type="button"
-				onclick={go('library')}
-				class="action-btn"
-				title="Done — back to Library"
-				aria-label="Mark done"
-			>
-				<Check size={15} strokeWidth={1.75} />
-			</button>
-		{:else if tier === 'shortlist'}
+		{#if tier === 'shortlist'}
 			<button
 				type="button"
 				onclick={go('active')}
@@ -122,17 +103,7 @@
 			>
 				<Crosshair size={15} strokeWidth={1.5} />
 			</button>
-			<button
-				type="button"
-				onclick={go('library')}
-				class="action-btn"
-				title="Done — back to Library"
-				aria-label="Mark done"
-			>
-				<Check size={15} strokeWidth={1.75} />
-			</button>
-		{:else}
-			<!-- Library: two promote options, current state filled -->
+		{:else if tier === 'library'}
 			<button
 				type="button"
 				onclick={go(current === 'shortlist' ? 'library' : 'shortlist')}
