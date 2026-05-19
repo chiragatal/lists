@@ -6,9 +6,10 @@
 		deleteItem,
 		allCategories,
 		tagsForCategory,
-		tierOf
+		tierOf,
+		removeCompletion
 	} from './store.svelte';
-	import { Trash2, X, Bookmark, Crosshair, Library } from './icons';
+	import { Trash2, X, Bookmark, Crosshair, Library, Check } from './icons';
 
 	type Props = {
 		open: boolean;
@@ -24,6 +25,7 @@
 	let tagsText = $state('');
 	let notes = $state('');
 	let placement = $state<Tier>('library');
+	let completedAt = $state<number[]>([]);
 	let categories = $state<string[]>([]);
 	let tagSuggestions = $state<string[]>([]);
 	let nameInput = $state<HTMLInputElement | null>(null);
@@ -36,12 +38,14 @@
 			tagsText = item.tags.join(', ');
 			notes = item.notes ?? '';
 			placement = tierOf(item);
+			completedAt = [...(item.completedAt ?? [])];
 		} else {
 			name = '';
 			category = '';
 			tagsText = '';
 			notes = '';
 			placement = defaultTier;
+			completedAt = [];
 		}
 		allCategories().then((c) => (categories = c));
 		queueMicrotask(() => nameInput?.focus());
@@ -104,6 +108,30 @@
 	function handleKey(e: KeyboardEvent) {
 		if (e.key === 'Escape') onClose();
 		else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) save();
+	}
+
+	async function removeEntry(ts: number) {
+		completedAt = completedAt.filter((t) => t !== ts);
+		if (item?.id != null) await removeCompletion(item.id, ts);
+	}
+
+	function formatCompletion(ts: number): { rel: string; abs: string } {
+		const diff = Date.now() - ts;
+		let rel: string;
+		if (diff < 60_000) rel = 'just now';
+		else if (diff < 3_600_000) rel = `${Math.floor(diff / 60_000)}m ago`;
+		else if (diff < 86_400_000) rel = `${Math.floor(diff / 3_600_000)}h ago`;
+		else if (diff < 7 * 86_400_000) rel = `${Math.floor(diff / 86_400_000)}d ago`;
+		else rel = `${Math.floor(diff / 86_400_000)}d ago`;
+		const d = new Date(ts);
+		const abs = d.toLocaleString(undefined, {
+			month: 'short',
+			day: 'numeric',
+			year: diff > 365 * 86_400_000 ? 'numeric' : undefined,
+			hour: 'numeric',
+			minute: '2-digit'
+		});
+		return { rel, abs };
 	}
 
 	const placements: { id: Tier; label: string; hint: string; Icon: typeof Library }[] = [
@@ -255,6 +283,51 @@
 						{/each}
 					</div>
 				</div>
+
+				{#if item && completedAt.length}
+					<div>
+						<div class="mb-2 flex items-baseline justify-between">
+							<span
+								class="font-mono text-[10px] tracking-[0.18em] text-[var(--color-faint)] uppercase"
+							>
+								Done · history
+							</span>
+							<span class="font-mono text-[10px] text-[var(--color-faint)] tabular-nums">
+								{completedAt.length}
+							</span>
+						</div>
+						<ul class="overflow-hidden rounded-lg border border-[var(--color-hairline)] bg-[var(--color-paper-2)]">
+							{#each [...completedAt].sort((a, b) => b - a) as ts, i (ts)}
+								{@const f = formatCompletion(ts)}
+								<li
+									class="flex items-center gap-2 px-3 py-2"
+									class:divider={i > 0}
+								>
+									<Check
+										size={12}
+										strokeWidth={2}
+										class="text-[var(--color-emerald)] shrink-0"
+									/>
+									<span class="flex-1 text-xs text-[var(--color-text)]">
+										{f.rel}
+									</span>
+									<span class="font-mono text-[10px] text-[var(--color-faint)] tabular-nums">
+										{f.abs}
+									</span>
+									<button
+										type="button"
+										onclick={() => removeEntry(ts)}
+										class="rounded-md p-1 text-[var(--color-muted)] hover:bg-[var(--color-paper-3)] hover:text-[var(--color-danger)]"
+										aria-label="Remove this completion entry"
+										title="Remove entry"
+									>
+										<X size={12} strokeWidth={1.5} />
+									</button>
+								</li>
+							{/each}
+						</ul>
+					</div>
+				{/if}
 			</div>
 
 			<footer
@@ -365,5 +438,8 @@
 	}
 	.placement-tile.selected[data-tier='active'] .placement-hint {
 		color: var(--color-emerald);
+	}
+	.divider {
+		border-top: 1px solid var(--color-hairline);
 	}
 </style>

@@ -62,12 +62,29 @@ export async function updateItem(id: number, patch: Partial<Item>) {
 }
 
 export async function setItemTier(id: number, tier: Tier) {
+	const item = await db.items.get(id);
+	if (!item) return;
+	const prev = tierOf(item);
 	const patch: Partial<Item> = {
 		inShortlist: tier === 'shortlist' ? 1 : 0,
 		inActive: tier === 'active' ? 1 : 0,
 		updatedAt: Date.now()
 	};
+	// Record a completion timestamp when an item is "Done" — moving from
+	// active/shortlist back to library.
+	if (tier === 'library' && (prev === 'active' || prev === 'shortlist')) {
+		patch.completedAt = [...(item.completedAt ?? []), Date.now()];
+	}
 	await db.items.update(id, patch);
+}
+
+export async function removeCompletion(id: number, ts: number) {
+	const item = await db.items.get(id);
+	if (!item?.completedAt?.length) return;
+	await db.items.update(id, {
+		completedAt: item.completedAt.filter((t) => t !== ts),
+		updatedAt: Date.now()
+	});
 }
 
 export async function deleteItem(id: number) {
@@ -97,6 +114,37 @@ export async function reorderItems(orderedIds: number[]) {
 export async function allCategories(): Promise<string[]> {
 	const items = await db.items.toArray();
 	return Array.from(new Set(items.map((i) => i.category).filter(Boolean))).sort();
+}
+
+export async function renameCategory(from: string, to: string) {
+	const trimmed = to.trim();
+	if (!trimmed || trimmed === from) return 0;
+	const items = await db.items.where('category').equals(from).toArray();
+	const now = Date.now();
+	await db.items.bulkUpdate(
+		items.map((it) => ({
+			key: it.id!,
+			changes: { category: trimmed, updatedAt: now }
+		}))
+	);
+	return items.length;
+}
+
+export async function renameTag(from: string, to: string) {
+	const trimmed = to.trim();
+	if (!trimmed || trimmed === from) return 0;
+	const items = await db.items.where('tags').equals(from).toArray();
+	const now = Date.now();
+	await db.items.bulkUpdate(
+		items.map((it) => {
+			const next = new Set(it.tags.map((t) => (t === from ? trimmed : t)));
+			return {
+				key: it.id!,
+				changes: { tags: [...next], updatedAt: now }
+			};
+		})
+	);
+	return items.length;
 }
 
 export async function tagsForCategory(category: string): Promise<string[]> {
@@ -133,6 +181,9 @@ export async function importAll(json: string, mode: 'replace' | 'merge' = 'repla
 			category: String(raw.category ?? '').trim(),
 			tags: Array.isArray(raw.tags) ? raw.tags.map(String) : [],
 			notes: typeof raw.notes === 'string' ? raw.notes : undefined,
+			completedAt: Array.isArray(raw.completedAt)
+				? raw.completedAt.filter((n: unknown): n is number => typeof n === 'number')
+				: undefined,
 			inShortlist: inShortlist as 0 | 1,
 			inActive: inActive as 0 | 1,
 			sortOrder: typeof raw.sortOrder === 'number' ? raw.sortOrder : idx * 1000,

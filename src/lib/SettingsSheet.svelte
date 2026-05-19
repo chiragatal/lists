@@ -1,6 +1,15 @@
 <script lang="ts">
-	import { Download, Upload, Trash2, X } from './icons';
-	import { exportAll, importAll, eraseAll } from './store.svelte';
+	import { liveQuery } from 'dexie';
+	import { Download, Upload, Trash2, X, Pencil, Check } from './icons';
+	import { db } from './db';
+	import {
+		exportAll,
+		importAll,
+		eraseAll,
+		renameCategory,
+		renameTag
+	} from './store.svelte';
+	import { backup } from './backup.svelte';
 
 	type Props = {
 		open: boolean;
@@ -14,6 +23,30 @@
 	let importMode = $state<'replace' | 'merge'>('merge');
 	let busy = $state(false);
 
+	// Manage data — categories and tags
+	let categories = $state<{ name: string; count: number }[]>([]);
+	let tags = $state<{ name: string; count: number }[]>([]);
+	let editing = $state<{ kind: 'category' | 'tag'; name: string; draft: string } | null>(null);
+
+	$effect(() => {
+		if (!open) return;
+		const sub = liveQuery(() => db.items.toArray()).subscribe((items) => {
+			const catMap = new Map<string, number>();
+			const tagMap = new Map<string, number>();
+			for (const it of items) {
+				if (it.category) catMap.set(it.category, (catMap.get(it.category) ?? 0) + 1);
+				for (const t of it.tags) tagMap.set(t, (tagMap.get(t) ?? 0) + 1);
+			}
+			categories = [...catMap.entries()]
+				.map(([name, count]) => ({ name, count }))
+				.sort((a, b) => a.name.localeCompare(b.name));
+			tags = [...tagMap.entries()]
+				.map(([name, count]) => ({ name, count }))
+				.sort((a, b) => a.name.localeCompare(b.name));
+		});
+		return () => sub.unsubscribe();
+	});
+
 	async function handleExport() {
 		busy = true;
 		try {
@@ -26,6 +59,7 @@
 			a.download = `lists-backup-${stamp}.json`;
 			a.click();
 			URL.revokeObjectURL(url);
+			backup.mark();
 			status = { kind: 'success', msg: 'Backup downloaded.' };
 		} catch (e) {
 			status = { kind: 'error', msg: (e as Error).message };
@@ -58,10 +92,60 @@
 		busy = true;
 		try {
 			await eraseAll();
+			backup.reset();
 			status = { kind: 'success', msg: 'All items erased.' };
 		} finally {
 			busy = false;
 		}
+	}
+
+	function beginEdit(kind: 'category' | 'tag', name: string) {
+		editing = { kind, name, draft: name };
+	}
+
+	function cancelEdit() {
+		editing = null;
+	}
+
+	async function commitEdit() {
+		if (!editing) return;
+		const target = editing.draft.trim();
+		if (!target || target === editing.name) {
+			editing = null;
+			return;
+		}
+		try {
+			if (editing.kind === 'category') {
+				const n = await renameCategory(editing.name, target);
+				const collidedWith = categories.find((c) => c.name === target && c.name !== editing!.name);
+				status = {
+					kind: 'success',
+					msg: collidedWith
+						? `Merged ${n} item${n === 1 ? '' : 's'} into "${target}".`
+						: `Renamed ${n} item${n === 1 ? '' : 's'}.`
+				};
+			} else {
+				const n = await renameTag(editing.name, target);
+				const collidedWith = tags.find((t) => t.name === target && t.name !== editing!.name);
+				status = {
+					kind: 'success',
+					msg: collidedWith
+						? `Merged ${n} item${n === 1 ? '' : 's'} into "${target}".`
+						: `Renamed ${n} item${n === 1 ? '' : 's'}.`
+				};
+			}
+		} catch (e) {
+			status = { kind: 'error', msg: (e as Error).message };
+		}
+		editing = null;
+	}
+
+	function formatBackup(): string {
+		const d = backup.daysSince;
+		if (d === null) return 'Never exported.';
+		if (d < 1) return 'Last backup: today.';
+		if (d < 2) return 'Last backup: yesterday.';
+		return `Last backup: ${Math.floor(d)} days ago.`;
 	}
 </script>
 
@@ -82,8 +166,10 @@
 				class="flex items-center justify-between border-b border-[var(--color-hairline)] px-5 py-4"
 			>
 				<div>
-					<p class="font-display text-lg leading-none">Settings</p>
-					<p class="mt-1 font-mono text-[10px] tracking-wide text-[var(--color-faint)] uppercase">
+					<p class="font-display-soft text-lg leading-none">Settings</p>
+					<p
+						class="mt-1 font-mono text-[10px] tracking-wide text-[var(--color-faint)] uppercase"
+					>
 						Backup &amp; data
 					</p>
 				</div>
@@ -97,11 +183,22 @@
 				</button>
 			</header>
 
-			<div class="space-y-5 p-5">
+			<div class="max-h-[78vh] space-y-5 overflow-y-auto p-5 scrollbar-thin">
 				<section>
-					<h3 class="mb-2 font-mono text-[10px] tracking-[0.18em] text-[var(--color-faint)] uppercase">
-						Export
-					</h3>
+					<div class="mb-2 flex items-baseline justify-between">
+						<h3
+							class="font-mono text-[10px] tracking-[0.18em] text-[var(--color-faint)] uppercase"
+						>
+							Export
+						</h3>
+						<p
+							class="font-mono text-[10px]"
+							class:text-[var(--color-amber)]={backup.stale && categories.length > 0}
+							class:text-[var(--color-faint)]={!backup.stale || categories.length === 0}
+						>
+							{formatBackup()}
+						</p>
+					</div>
 					<button
 						type="button"
 						onclick={handleExport}
@@ -119,7 +216,9 @@
 				</section>
 
 				<section>
-					<h3 class="mb-2 font-mono text-[10px] tracking-[0.18em] text-[var(--color-faint)] uppercase">
+					<h3
+						class="mb-2 font-mono text-[10px] tracking-[0.18em] text-[var(--color-faint)] uppercase"
+					>
 						Import
 					</h3>
 					<div class="mb-2 flex gap-1.5">
@@ -169,7 +268,152 @@
 				</section>
 
 				<section>
-					<h3 class="mb-2 font-mono text-[10px] tracking-[0.18em] text-[var(--color-faint)] uppercase">
+					<div class="mb-2 flex items-baseline justify-between">
+						<h3
+							class="font-mono text-[10px] tracking-[0.18em] text-[var(--color-faint)] uppercase"
+						>
+							Categories
+						</h3>
+						<p class="font-mono text-[10px] text-[var(--color-faint)]">
+							{categories.length} total
+						</p>
+					</div>
+					{#if categories.length === 0}
+						<p class="rounded-lg border border-[var(--color-hairline)] bg-[var(--color-paper-2)] p-3 text-xs text-[var(--color-muted)]">
+							None yet.
+						</p>
+					{:else}
+						<ul class="overflow-hidden rounded-lg border border-[var(--color-hairline)] bg-[var(--color-paper-2)]">
+							{#each categories as c, i}
+								<li
+									class="flex items-center gap-2 px-3 py-2"
+									class:divider={i > 0}
+								>
+									{#if editing?.kind === 'category' && editing.name === c.name}
+										<input
+											type="text"
+											bind:value={editing.draft}
+											onkeydown={(e) => {
+												if (e.key === 'Enter') commitEdit();
+												else if (e.key === 'Escape') cancelEdit();
+											}}
+											class="flex-1 border-b border-[var(--color-emerald)] bg-transparent py-0.5 text-sm text-[var(--color-text-bright)] outline-none"
+										/>
+										<button
+											type="button"
+											onclick={commitEdit}
+											class="rounded-md p-1 text-[var(--color-emerald)] hover:bg-[var(--color-paper-3)]"
+											aria-label="Save"
+										>
+											<Check size={14} strokeWidth={2} />
+										</button>
+										<button
+											type="button"
+											onclick={cancelEdit}
+											class="rounded-md p-1 text-[var(--color-muted)] hover:bg-[var(--color-paper-3)]"
+											aria-label="Cancel"
+										>
+											<X size={14} strokeWidth={1.5} />
+										</button>
+									{:else}
+										<span class="flex-1 truncate text-sm text-[var(--color-text)]">
+											{c.name}
+										</span>
+										<span class="font-mono text-[10px] tabular-nums text-[var(--color-faint)]">
+											{c.count}
+										</span>
+										<button
+											type="button"
+											onclick={() => beginEdit('category', c.name)}
+											class="rounded-md p-1 text-[var(--color-muted)] hover:bg-[var(--color-paper-3)] hover:text-[var(--color-text)]"
+											aria-label="Rename {c.name}"
+										>
+											<Pencil size={12} strokeWidth={1.5} />
+										</button>
+									{/if}
+								</li>
+							{/each}
+						</ul>
+					{/if}
+				</section>
+
+				<section>
+					<div class="mb-2 flex items-baseline justify-between">
+						<h3
+							class="font-mono text-[10px] tracking-[0.18em] text-[var(--color-faint)] uppercase"
+						>
+							Tags
+						</h3>
+						<p class="font-mono text-[10px] text-[var(--color-faint)]">
+							{tags.length} total
+						</p>
+					</div>
+					{#if tags.length === 0}
+						<p class="rounded-lg border border-[var(--color-hairline)] bg-[var(--color-paper-2)] p-3 text-xs text-[var(--color-muted)]">
+							None yet.
+						</p>
+					{:else}
+						<ul class="overflow-hidden rounded-lg border border-[var(--color-hairline)] bg-[var(--color-paper-2)]">
+							{#each tags as t, i}
+								<li
+									class="flex items-center gap-2 px-3 py-2"
+									class:divider={i > 0}
+								>
+									{#if editing?.kind === 'tag' && editing.name === t.name}
+										<input
+											type="text"
+											bind:value={editing.draft}
+											onkeydown={(e) => {
+												if (e.key === 'Enter') commitEdit();
+												else if (e.key === 'Escape') cancelEdit();
+											}}
+											class="flex-1 border-b border-[var(--color-emerald)] bg-transparent py-0.5 text-sm text-[var(--color-text-bright)] outline-none"
+										/>
+										<button
+											type="button"
+											onclick={commitEdit}
+											class="rounded-md p-1 text-[var(--color-emerald)] hover:bg-[var(--color-paper-3)]"
+											aria-label="Save"
+										>
+											<Check size={14} strokeWidth={2} />
+										</button>
+										<button
+											type="button"
+											onclick={cancelEdit}
+											class="rounded-md p-1 text-[var(--color-muted)] hover:bg-[var(--color-paper-3)]"
+											aria-label="Cancel"
+										>
+											<X size={14} strokeWidth={1.5} />
+										</button>
+									{:else}
+										<span class="flex-1 truncate font-mono text-xs text-[var(--color-text)]">
+											{t.name}
+										</span>
+										<span class="font-mono text-[10px] tabular-nums text-[var(--color-faint)]">
+											{t.count}
+										</span>
+										<button
+											type="button"
+											onclick={() => beginEdit('tag', t.name)}
+											class="rounded-md p-1 text-[var(--color-muted)] hover:bg-[var(--color-paper-3)] hover:text-[var(--color-text)]"
+											aria-label="Rename {t.name}"
+										>
+											<Pencil size={12} strokeWidth={1.5} />
+										</button>
+									{/if}
+								</li>
+							{/each}
+						</ul>
+					{/if}
+					<p class="mt-1.5 px-1 font-mono text-[9px] text-[var(--color-faint)]">
+						Rename to an existing name to merge.
+					</p>
+				</section>
+
+				<section>
+					<h3
+						class="mb-2 font-mono text-[10px] tracking-[0.18em] text-[var(--color-faint)] uppercase"
+					>
 						Danger
 					</h3>
 					<button
@@ -214,6 +458,9 @@
 	}
 	button[type='button']:hover {
 		color: var(--color-text);
+	}
+	.divider {
+		border-top: 1px solid var(--color-hairline);
 	}
 	.status-success {
 		border-color: color-mix(in oklab, var(--color-success) 40%, var(--color-hairline));

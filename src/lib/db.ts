@@ -8,6 +8,7 @@ export interface Item {
 	category: string;
 	tags: string[];
 	notes?: string;
+	completedAt?: number[];
 	inShortlist: 0 | 1;
 	inActive: 0 | 1;
 	sortOrder: number;

@@ -6,6 +6,7 @@
 	import { liveQuery } from 'dexie';
 	import { db } from './db';
 	import { itemsByTier, reorderItems } from './store.svelte';
+	import { backup } from './backup.svelte';
 	import { tierMeta, tierColorClass } from './tier';
 	import {
 		Plus,
@@ -260,11 +261,14 @@
 					<button
 						type="button"
 						onclick={() => (settingsOpen = true)}
-						class="icon-btn"
+						class="icon-btn relative"
 						aria-label="Settings"
-						title="Settings"
+						title={backup.stale && totalCount > 0 ? 'Settings — backup overdue' : 'Settings'}
 					>
 						<Settings size={15} strokeWidth={1.5} />
+						{#if backup.stale && totalCount > 0}
+							<span class="backup-dot" aria-hidden="true"></span>
+						{/if}
 					</button>
 				</div>
 			</div>
@@ -640,6 +644,17 @@
 
 	.search-wrap.search-focus {
 		border-color: var(--tier-color);
+	}
+
+	.backup-dot {
+		position: absolute;
+		top: 6px;
+		right: 6px;
+		width: 6px;
+		height: 6px;
+		border-radius: 9999px;
+		background: var(--color-amber);
+		box-shadow: 0 0 0 2px var(--color-paper);
 	}
 
 	:global(.dnd-drop-target) {

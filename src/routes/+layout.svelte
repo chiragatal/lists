@@ -1,9 +1,15 @@
 <script lang="ts">
 	import '../app.css';
+	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { Bookmark, Crosshair, Library } from '$lib/icons';
+	import { requestPersistentStorage } from '$lib/backup.svelte';
 
 	let { children } = $props();
+
+	onMount(() => {
+		requestPersistentStorage();
+	});
 
 	const tabs = [
 		{
