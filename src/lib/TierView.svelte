@@ -17,7 +17,8 @@
 		Tag,
 		Bookmark,
 		Library,
-		Dices
+		Dices,
+		History
 	} from './icons';
 	import ItemEditor from './ItemEditor.svelte';
 	import ItemCard from './ItemCard.svelte';
@@ -27,6 +28,7 @@
 	type TagMatchMode = 'all' | 'any';
 	import SettingsSheet from './SettingsSheet.svelte';
 	import PickModal from './PickModal.svelte';
+	import HistorySheet from './HistorySheet.svelte';
 
 	type Props = { tier: Tier };
 	let { tier }: Props = $props();
@@ -45,6 +47,7 @@
 	let tagFilterOpen = $state(false);
 	let settingsOpen = $state(false);
 	let pickOpen = $state(false);
+	let historyOpen = $state(false);
 	let searchFocused = $state(false);
 
 	let totalCount = $state(0);
@@ -257,6 +260,15 @@
 					>
 						<Plus size={15} strokeWidth={2} />
 						<span class="add-label">Add</span>
+					</button>
+					<button
+						type="button"
+						onclick={() => (historyOpen = true)}
+						class="icon-btn"
+						aria-label="History"
+						title="History"
+					>
+						<History size={15} strokeWidth={1.5} />
 					</button>
 					<button
 						type="button"
@@ -574,6 +586,15 @@
 />
 
 <SettingsSheet open={settingsOpen} onClose={() => (settingsOpen = false)} />
+
+<HistorySheet
+	open={historyOpen}
+	onClose={() => (historyOpen = false)}
+	onOpenItem={(it) => {
+		historyOpen = false;
+		openEdit(it);
+	}}
+/>
 
 <style>
 	.page {

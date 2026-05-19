@@ -7,6 +7,7 @@ export {
 	Dices,
 	Download,
 	GripVertical,
+	History,
 	LayoutList,
 	Library,
 	ListFilter,
