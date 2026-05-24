@@ -10,5 +10,13 @@
 	"compatibility_flags": ["nodejs_compat"],
 	"observability": {
 		"enabled": true
-	}
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "lists-db",
+			"database_id": "8343c975-acd0-4d38-a1d3-0b53b54fd48d",
+			"migrations_dir": "migrations"
+		}
+	]
 }
