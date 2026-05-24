@@ -373,7 +373,21 @@
 
 		<!-- Quick category filters -->
 		<div class="mb-3">
-			<CategoryChips items={items} selected={categoryFilter} onSelect={(c) => (categoryFilter = c)} />
+			{#if isLoading}
+				<div class="-mx-5 overflow-hidden px-5">
+					<ul class="flex w-max items-center gap-1.5 pb-0.5">
+						{#each [56, 92, 78, 64, 102] as w, i}
+							<li class="skeleton-chip" style="width: {w}px; --d: {i * 60}ms"></li>
+						{/each}
+					</ul>
+				</div>
+			{:else}
+				<CategoryChips
+					items={items}
+					selected={categoryFilter}
+					onSelect={(c) => (categoryFilter = c)}
+				/>
+			{/if}
 		</div>
 
 		<!-- Selected tag pills -->
@@ -411,11 +425,28 @@
 		</div>
 
 		{#if isLoading}
-			<ul class="space-y-1.5" aria-busy="true" aria-label="Loading items">
-				{#each Array(3) as _, i}
-					<li class="skeleton-card" style="--d: {i * 90}ms"></li>
+			<div class="space-y-7" aria-busy="true" aria-label="Loading items">
+				{#each [{ w: 70, n: 2 }, { w: 56, n: 1 }] as group, gi}
+					<section>
+						<div class="mb-3 flex items-baseline gap-3">
+							<div
+								class="skeleton-line"
+								style="width: {group.w}px; --d: {gi * 120}ms"
+							></div>
+							<div class="skeleton-line" style="width: 14px"></div>
+							<div class="h-px flex-1 bg-[var(--color-hairline)]"></div>
+						</div>
+						<ul class="space-y-1.5">
+							{#each Array(group.n) as _, i}
+								<li
+									class="skeleton-card"
+									style="--d: {(gi * 2 + i) * 80 + 100}ms"
+								></li>
+							{/each}
+						</ul>
+					</section>
 				{/each}
-			</ul>
+			</div>
 		{:else if items.length === 0}
 			{@const showFunnelHop = totalCount > 0 && tier !== 'library'}
 			<div
@@ -690,10 +721,9 @@
 		border-radius: 0.75rem;
 	}
 
-	.skeleton-card {
-		height: 56px;
-		border-radius: 0.75rem;
-		border: 1px solid var(--color-hairline);
+	.skeleton-card,
+	.skeleton-chip,
+	.skeleton-line {
 		background:
 			linear-gradient(
 				100deg,
@@ -704,6 +734,24 @@
 		background-size: 200% 100%;
 		animation: shimmer 1.6s ease-in-out infinite;
 		animation-delay: var(--d, 0ms);
+	}
+
+	.skeleton-card {
+		height: 56px;
+		border-radius: 0.75rem;
+		border: 1px solid var(--color-hairline);
+	}
+
+	.skeleton-chip {
+		height: 26px;
+		border-radius: 9999px;
+		border: 1px solid var(--color-hairline);
+		list-style: none;
+	}
+
+	.skeleton-line {
+		height: 10px;
+		border-radius: 4px;
 	}
 
 	@keyframes shimmer {
@@ -717,7 +765,9 @@
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.skeleton-card {
+		.skeleton-card,
+		.skeleton-chip,
+		.skeleton-line {
 			animation: none;
 			opacity: 0.6;
 		}
