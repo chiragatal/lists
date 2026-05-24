@@ -40,6 +40,7 @@
 
 	const items = $derived(itemsByTier(tier));
 	const totalCount = $derived(lists.items.length);
+	const isLoading = $derived(!lists.isLoaded);
 
 	let query = $state('');
 	let categoryFilter = $state('');
@@ -268,10 +269,12 @@
 						onclick={() => (settingsOpen = true)}
 						class="icon-btn relative"
 						aria-label="Settings"
-						title={backup.stale && totalCount > 0 ? 'Settings — backup overdue' : 'Settings'}
+						title={!isLoading && backup.stale && totalCount > 0
+							? 'Settings — backup overdue'
+							: 'Settings'}
 					>
 						<Settings size={15} strokeWidth={1.5} />
-						{#if backup.stale && totalCount > 0}
+						{#if !isLoading && backup.stale && totalCount > 0}
 							<span class="backup-dot" aria-hidden="true"></span>
 						{/if}
 					</button>
@@ -282,12 +285,16 @@
 			<div
 				class="mt-5 flex items-baseline gap-2 font-mono text-[11px] tabular-nums"
 			>
-				<span class="text-[var(--tier-color)]">{filtered.length}</span>
-				<span class="text-[var(--color-faint)]">/</span>
-				<span class="text-[var(--color-muted)]">{items.length}</span>
-				<span class="text-[var(--color-faint)]">
-					{items.length === 1 ? 'item' : 'items'}
-				</span>
+				{#if isLoading}
+					<span class="text-[var(--color-faint)]">—</span>
+				{:else}
+					<span class="text-[var(--tier-color)]">{filtered.length}</span>
+					<span class="text-[var(--color-faint)]">/</span>
+					<span class="text-[var(--color-muted)]">{items.length}</span>
+					<span class="text-[var(--color-faint)]">
+						{items.length === 1 ? 'item' : 'items'}
+					</span>
+				{/if}
 				{#if hasFilters}
 					<button
 						type="button"
@@ -403,7 +410,13 @@
 			{/if}
 		</div>
 
-		{#if items.length === 0}
+		{#if isLoading}
+			<ul class="space-y-1.5" aria-busy="true" aria-label="Loading items">
+				{#each Array(3) as _, i}
+					<li class="skeleton-card" style="--d: {i * 90}ms"></li>
+				{/each}
+			</ul>
+		{:else if items.length === 0}
 			{@const showFunnelHop = totalCount > 0 && tier !== 'library'}
 			<div
 				class="rounded-2xl border border-dashed border-[var(--color-hairline-strong)] bg-[var(--color-paper)]/40 px-6 py-12 text-center"
@@ -675,5 +688,38 @@
 		outline: 1px dashed var(--color-hairline-strong);
 		outline-offset: 2px;
 		border-radius: 0.75rem;
+	}
+
+	.skeleton-card {
+		height: 56px;
+		border-radius: 0.75rem;
+		border: 1px solid var(--color-hairline);
+		background:
+			linear-gradient(
+				100deg,
+				var(--color-paper) 0%,
+				var(--color-paper-2) 50%,
+				var(--color-paper) 100%
+			);
+		background-size: 200% 100%;
+		animation: shimmer 1.6s ease-in-out infinite;
+		animation-delay: var(--d, 0ms);
+	}
+
+	@keyframes shimmer {
+		0%,
+		100% {
+			background-position: 200% 0;
+		}
+		50% {
+			background-position: 0 0;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.skeleton-card {
+			animation: none;
+			opacity: 0.6;
+		}
 	}
 </style>
