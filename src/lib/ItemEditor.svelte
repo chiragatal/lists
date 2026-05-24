@@ -26,9 +26,10 @@
 	let notes = $state('');
 	let placement = $state<Tier>('library');
 	let completedAt = $state<number[]>([]);
-	let categories = $state<string[]>([]);
-	let tagSuggestions = $state<string[]>([]);
 	let nameInput = $state<HTMLInputElement | null>(null);
+
+	const categories = $derived(allCategories());
+	const tagSuggestions = $derived(tagsForCategory(category.trim()));
 
 	$effect(() => {
 		if (!open) return;
@@ -47,17 +48,7 @@
 			placement = defaultTier;
 			completedAt = [];
 		}
-		allCategories().then((c) => (categories = c));
 		queueMicrotask(() => nameInput?.focus());
-	});
-
-	$effect(() => {
-		const c = category.trim();
-		if (!c) {
-			tagSuggestions = [];
-			return;
-		}
-		tagsForCategory(c).then((t) => (tagSuggestions = t));
 	});
 
 	function parseTags(s: string): string[] {
@@ -88,7 +79,7 @@
 				name: n,
 				category: c,
 				tags,
-				notes: trimmedNotes || undefined,
+				notes: (trimmedNotes || null) as string | undefined,
 				inShortlist: placement === 'shortlist' ? 1 : 0,
 				inActive: placement === 'active' ? 1 : 0
 			});

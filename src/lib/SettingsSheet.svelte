@@ -1,13 +1,13 @@
 <script lang="ts">
-	import { liveQuery } from 'dexie';
 	import { Download, Upload, Trash2, X, Pencil, Check } from './icons';
-	import { db } from './db';
 	import {
 		exportAll,
 		importAll,
 		eraseAll,
 		renameCategory,
-		renameTag
+		renameTag,
+		signOut,
+		lists
 	} from './store.svelte';
 	import { backup } from './backup.svelte';
 
@@ -23,29 +23,24 @@
 	let importMode = $state<'replace' | 'merge'>('merge');
 	let busy = $state(false);
 
-	// Manage data — categories and tags
-	let categories = $state<{ name: string; count: number }[]>([]);
-	let tags = $state<{ name: string; count: number }[]>([]);
-	let editing = $state<{ kind: 'category' | 'tag'; name: string; draft: string } | null>(null);
-
-	$effect(() => {
-		if (!open) return;
-		const sub = liveQuery(() => db.items.toArray()).subscribe((items) => {
-			const catMap = new Map<string, number>();
-			const tagMap = new Map<string, number>();
-			for (const it of items) {
-				if (it.category) catMap.set(it.category, (catMap.get(it.category) ?? 0) + 1);
-				for (const t of it.tags) tagMap.set(t, (tagMap.get(t) ?? 0) + 1);
-			}
-			categories = [...catMap.entries()]
-				.map(([name, count]) => ({ name, count }))
-				.sort((a, b) => a.name.localeCompare(b.name));
-			tags = [...tagMap.entries()]
-				.map(([name, count]) => ({ name, count }))
-				.sort((a, b) => a.name.localeCompare(b.name));
-		});
-		return () => sub.unsubscribe();
+	// Manage data — categories and tags (derived from the store)
+	const categories = $derived.by(() => {
+		const map = new Map<string, number>();
+		for (const it of lists.items) {
+			if (it.category) map.set(it.category, (map.get(it.category) ?? 0) + 1);
+		}
+		return [...map.entries()]
+			.map(([name, count]) => ({ name, count }))
+			.sort((a, b) => a.name.localeCompare(b.name));
 	});
+	const tags = $derived.by(() => {
+		const map = new Map<string, number>();
+		for (const it of lists.items) for (const t of it.tags) map.set(t, (map.get(t) ?? 0) + 1);
+		return [...map.entries()]
+			.map(([name, count]) => ({ name, count }))
+			.sort((a, b) => a.name.localeCompare(b.name));
+	});
+	let editing = $state<{ kind: 'category' | 'tag'; name: string; draft: string } | null>(null);
 
 	async function handleExport() {
 		busy = true;
@@ -86,14 +81,22 @@
 		}
 	}
 
-	async function handleErase() {
-		if (!confirm('Erase ALL items? This cannot be undone.')) return;
-		if (!confirm('Really erase everything?')) return;
+	async function handleDeleteAccount() {
+		if (!confirm('Delete your account and erase ALL your data? This cannot be undone.')) return;
+		if (!confirm('Really delete the account?')) return;
 		busy = true;
 		try {
-			await eraseAll();
 			backup.reset();
-			status = { kind: 'success', msg: 'All items erased.' };
+			await eraseAll();
+		} finally {
+			busy = false;
+		}
+	}
+
+	async function handleSignOut() {
+		busy = true;
+		try {
+			await signOut();
 		} finally {
 			busy = false;
 		}
@@ -184,6 +187,48 @@
 			</header>
 
 			<div class="max-h-[78vh] space-y-5 overflow-y-auto p-5 scrollbar-thin">
+				{#if lists.user}
+					<section>
+						<h3
+							class="mb-2 font-mono text-[10px] tracking-[0.18em] text-[var(--color-faint)] uppercase"
+						>
+							Account
+						</h3>
+						<div class="flex items-center gap-3 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-paper-2)] px-3.5 py-3">
+							{#if lists.user.picture}
+								<img
+									src={lists.user.picture}
+									alt=""
+									class="h-8 w-8 rounded-full border border-[var(--color-hairline)]"
+									referrerpolicy="no-referrer"
+								/>
+							{:else}
+								<div
+									class="grid h-8 w-8 place-items-center rounded-full border border-[var(--color-hairline)] bg-[var(--color-paper)] font-mono text-[11px] text-[var(--color-muted)] uppercase"
+								>
+									{lists.user.email.slice(0, 1)}
+								</div>
+							{/if}
+							<div class="min-w-0 flex-1">
+								{#if lists.user.name}
+									<p class="truncate text-sm font-medium text-[var(--color-text-bright)]">
+										{lists.user.name}
+									</p>
+								{/if}
+								<p class="truncate text-xs text-[var(--color-muted)]">{lists.user.email}</p>
+							</div>
+							<button
+								type="button"
+								onclick={handleSignOut}
+								disabled={busy}
+								class="font-mono text-[10px] tracking-[0.18em] text-[var(--color-muted)] uppercase hover:text-[var(--color-text)] disabled:opacity-50"
+							>
+								Sign out
+							</button>
+						</div>
+					</section>
+				{/if}
+
 				<section>
 					<div class="mb-2 flex items-baseline justify-between">
 						<h3
@@ -418,15 +463,17 @@
 					</h3>
 					<button
 						type="button"
-						onclick={handleErase}
+						onclick={handleDeleteAccount}
 						disabled={busy}
 						class="flex w-full items-center gap-3 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-paper-2)] px-3.5 py-3 text-left text-sm transition-colors hover:border-[var(--color-danger)] disabled:opacity-50"
 					>
 						<Trash2 size={17} strokeWidth={1.5} class="text-[var(--color-danger)]" />
 						<div class="flex-1">
-							<p class="font-medium text-[var(--color-text-bright)]">Erase everything</p>
+							<p class="font-medium text-[var(--color-text-bright)]">
+								Delete account and erase all data
+							</p>
 							<p class="text-xs text-[var(--color-muted)]">
-								Delete all items from the device. Cannot be undone.
+								Removes your account, all items, and sessions. Cannot be undone.
 							</p>
 						</div>
 					</button>

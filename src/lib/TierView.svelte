@@ -3,9 +3,7 @@
 	import { flip } from 'svelte/animate';
 	import { fade } from 'svelte/transition';
 	import type { Item, Tier } from './db';
-	import { liveQuery } from 'dexie';
-	import { db } from './db';
-	import { itemsByTier, reorderItems } from './store.svelte';
+	import { itemsByTier, lists, reorderItems } from './store.svelte';
 	import { backup } from './backup.svelte';
 	import { tierMeta, tierColorClass } from './tier';
 	import {
@@ -36,7 +34,13 @@
 	const meta = $derived(tierMeta(tier));
 	const tierClass = $derived(tierColorClass(tier));
 
-	let items = $state<Item[]>([]);
+	$effect(() => {
+		lists.ensureLoaded();
+	});
+
+	const items = $derived(itemsByTier(tier));
+	const totalCount = $derived(lists.items.length);
+
 	let query = $state('');
 	let categoryFilter = $state('');
 	let selectedTags = $state<string[]>([]);
@@ -50,17 +54,6 @@
 	let historyOpen = $state(false);
 	let searchFocused = $state(false);
 
-	let totalCount = $state(0);
-
-	$effect(() => {
-		const sub = itemsByTier(tier).subscribe((rows) => (items = rows));
-		return () => sub.unsubscribe();
-	});
-
-	$effect(() => {
-		const sub = liveQuery(() => db.items.count()).subscribe((n) => (totalCount = n));
-		return () => sub.unsubscribe();
-	});
 
 	function tagHits(it: Item): number {
 		if (!selectedTags.length) return 0;

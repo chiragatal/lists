@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { liveQuery } from 'dexie';
-	import { db, type Item } from './db';
+	import type { Item } from './db';
+	import { lists } from './store.svelte';
 	import { History, X } from './icons';
 
 	type Props = {
@@ -13,23 +13,18 @@
 
 	type Event = { item: Item; ts: number };
 
-	let allEvents = $state<Event[]>([]);
 	let rangeDays = $state<number | null>(null); // null = all-time
 	let selectedTags = $state<string[]>([]);
 
-	$effect(() => {
-		if (!open) return;
-		const sub = liveQuery(() => db.items.toArray()).subscribe((items) => {
-			const events: Event[] = [];
-			for (const item of items) {
-				for (const ts of item.completedAt ?? []) {
-					events.push({ item, ts });
-				}
+	const allEvents = $derived.by<Event[]>(() => {
+		const events: Event[] = [];
+		for (const item of lists.items) {
+			for (const ts of item.completedAt ?? []) {
+				events.push({ item, ts });
 			}
-			events.sort((a, b) => b.ts - a.ts);
-			allEvents = events;
-		});
-		return () => sub.unsubscribe();
+		}
+		events.sort((a, b) => b.ts - a.ts);
+		return events;
 	});
 
 	// Available tags = union of tags across items that have any completion.

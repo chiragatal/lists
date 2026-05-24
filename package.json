@@ -26,7 +26,6 @@
 		"@lucide/svelte": "^1.16.0",
 		"@tailwindcss/vite": "^4.3.0",
 		"@vite-pwa/sveltekit": "^1.1.0",
-		"dexie": "^4.4.2",
 		"svelte-dnd-action": "^0.9.69",
 		"tailwindcss": "^4.3.0"
 	}
