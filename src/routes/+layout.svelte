@@ -34,6 +34,8 @@
 			tone: 'slate'
 		}
 	];
+
+	const hideNav = $derived(page.url.pathname.startsWith('/login'));
 </script>
 
 <div class="flex min-h-dvh flex-col">
@@ -41,6 +43,7 @@
 		{@render children()}
 	</main>
 
+	{#if !hideNav}
 	<nav
 		class="bottom-nav fixed right-0 bottom-0 left-0 z-20"
 		style="padding-bottom: env(safe-area-inset-bottom);"
@@ -65,6 +68,7 @@
 			{/each}
 		</ul>
 	</nav>
+	{/if}
 </div>
 
 <style>
