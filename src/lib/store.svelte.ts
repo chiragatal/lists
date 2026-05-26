@@ -120,7 +120,13 @@ export async function addItem(input: {
 	tier: Tier;
 }): Promise<number> {
 	const item = await api<Item>('/api/items', { method: 'POST', json: input });
-	lists.items = [...lists.items, item];
+	// Defensive: never let the same id appear twice in local state.
+	const existsAt = lists.items.findIndex((it) => it.id === item.id);
+	if (existsAt >= 0) {
+		lists.items = lists.items.map((it) => (it.id === item.id ? item : it));
+	} else {
+		lists.items = [...lists.items, item];
+	}
 	return item.id;
 }
 

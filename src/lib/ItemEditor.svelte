@@ -27,6 +27,7 @@
 	let placement = $state<Tier>('library');
 	let completedAt = $state<number[]>([]);
 	let nameInput = $state<HTMLInputElement | null>(null);
+	let saving = $state(false);
 
 	const categories = $derived(allCategories());
 	const tagSuggestions = $derived(tagsForCategory(category.trim()));
@@ -69,24 +70,30 @@
 	}
 
 	async function save() {
+		if (saving) return;
 		const n = name.trim();
 		const c = category.trim();
 		if (!n || !c) return;
-		const tags = parseTags(tagsText);
-		const trimmedNotes = notes.trim();
-		if (item?.id != null) {
-			await updateItem(item.id, {
-				name: n,
-				category: c,
-				tags,
-				notes: (trimmedNotes || null) as string | undefined,
-				inShortlist: placement === 'shortlist' ? 1 : 0,
-				inActive: placement === 'active' ? 1 : 0
-			});
-		} else {
-			await addItem({ name: n, category: c, tags, notes: trimmedNotes, tier: placement });
+		saving = true;
+		try {
+			const tags = parseTags(tagsText);
+			const trimmedNotes = notes.trim();
+			if (item?.id != null) {
+				await updateItem(item.id, {
+					name: n,
+					category: c,
+					tags,
+					notes: (trimmedNotes || null) as string | undefined,
+					inShortlist: placement === 'shortlist' ? 1 : 0,
+					inActive: placement === 'active' ? 1 : 0
+				});
+			} else {
+				await addItem({ name: n, category: c, tags, notes: trimmedNotes, tier: placement });
+			}
+			onClose();
+		} finally {
+			saving = false;
 		}
-		onClose();
 	}
 
 	async function remove() {
@@ -346,10 +353,10 @@
 					<button
 						type="button"
 						onclick={save}
-						disabled={!name.trim() || !category.trim()}
+						disabled={!name.trim() || !category.trim() || saving}
 						class="rounded-md bg-[var(--color-emerald)] px-4 py-1.5 text-xs font-semibold tracking-wide text-[var(--color-ink-deep)] uppercase transition-opacity hover:bg-[var(--color-emerald-bright)] disabled:opacity-30"
 					>
-						Save
+						{saving ? 'Saving…' : 'Save'}
 					</button>
 				</div>
 			</footer>
