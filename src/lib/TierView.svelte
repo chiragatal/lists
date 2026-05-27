@@ -3,7 +3,9 @@
 	import { flip } from 'svelte/animate';
 	import { fade } from 'svelte/transition';
 	import type { Item, Tier } from './db';
-	import { itemsByTier, lists, reorderItems } from './store.svelte';
+	import { goto } from '$app/navigation';
+	import { itemsByTier, lists, reorderItems, clearActive } from './store.svelte';
+	import { plans } from './plans.svelte';
 	import { tierMeta, tierColorClass } from './tier';
 	import {
 		Plus,
@@ -15,7 +17,11 @@
 		History,
 		ChevronLeft,
 		Bookmark,
-		Library
+		Library,
+		MoreHorizontal,
+		Pencil,
+		Trash2,
+		Check
 	} from './icons';
 	import ItemEditor from './ItemEditor.svelte';
 	import ItemCard from './ItemCard.svelte';
@@ -51,6 +57,33 @@
 	let pickOpen = $state(false);
 	let historyOpen = $state(false);
 	let searchFocused = $state(false);
+	let menuOpen = $state(false);
+	let renaming = $state(false);
+	let renameValue = $state('');
+
+	function startRename() {
+		menuOpen = false;
+		renameValue = lists.currentPlanName;
+		renaming = true;
+	}
+	async function confirmRename() {
+		const n = renameValue.trim();
+		renaming = false;
+		if (!n || n === lists.currentPlanName) return;
+		await plans.renamePlan(planId, n);
+		lists.currentPlanName = n;
+	}
+	async function handleClearActive() {
+		menuOpen = false;
+		if (!confirm('Clear everything from Active back to Library?')) return;
+		await clearActive();
+	}
+	async function handleDeletePlan() {
+		menuOpen = false;
+		if (!confirm(`Delete the plan "${lists.currentPlanName}"? This removes all its items.`)) return;
+		await plans.deletePlan(planId);
+		await goto('/');
+	}
 
 
 	function tagHits(it: Item): number {
@@ -230,24 +263,72 @@
 					<a href="/" class="icon-btn shrink-0" aria-label="Back to plans">
 						<ChevronLeft size={18} strokeWidth={1.5} />
 					</a>
-					<span class="truncate text-sm font-medium text-[var(--color-text-bright)]">
-						{lists.currentPlanName || 'Plan'}
-					</span>
+					{#if renaming}
+						<input
+							type="text"
+							bind:value={renameValue}
+							onkeydown={(e) => {
+								if (e.key === 'Enter') confirmRename();
+								else if (e.key === 'Escape') (renaming = false);
+							}}
+							onblur={confirmRename}
+							class="min-w-0 flex-1 border-b border-[var(--tier-color)] bg-transparent text-sm font-medium text-[var(--color-text-bright)] outline-none"
+						/>
+					{:else}
+						<span class="truncate text-sm font-medium text-[var(--color-text-bright)]">
+							{lists.currentPlanName || 'Plan'}
+						</span>
+					{/if}
 				</div>
 				<div class="flex shrink-0 items-center gap-1.5">
 					<button type="button" onclick={openNew} class="add-btn" aria-label="Add new item">
 						<Plus size={15} strokeWidth={2} />
 						<span class="add-label">Add</span>
 					</button>
-					<button
-						type="button"
-						onclick={() => (historyOpen = true)}
-						class="icon-btn"
-						aria-label="History"
-						title="History"
-					>
-						<History size={15} strokeWidth={1.5} />
-					</button>
+					<div class="relative">
+						<button
+							type="button"
+							onclick={() => (menuOpen = !menuOpen)}
+							class="icon-btn"
+							aria-label="Plan menu"
+							title="Plan menu"
+						>
+							<MoreHorizontal size={16} strokeWidth={1.5} />
+						</button>
+						{#if menuOpen}
+							<button
+								type="button"
+								class="fixed inset-0 z-20 cursor-default"
+								onclick={() => (menuOpen = false)}
+								aria-label="Close menu"
+								tabindex="-1"
+							></button>
+							<div
+								class="menu absolute right-0 z-30 mt-1.5 w-48 overflow-hidden rounded-lg border border-[var(--color-hairline-strong)] bg-[var(--color-paper-2)] shadow-xl"
+							>
+								<button type="button" class="menu-item" onclick={startRename}>
+									<Pencil size={14} strokeWidth={1.5} /> Rename
+								</button>
+								<button
+									type="button"
+									class="menu-item"
+									onclick={() => {
+										menuOpen = false;
+										historyOpen = true;
+									}}
+								>
+									<History size={14} strokeWidth={1.5} /> History
+								</button>
+								<button type="button" class="menu-item" onclick={handleClearActive}>
+									<Check size={14} strokeWidth={1.75} /> Clear active
+								</button>
+								<div class="h-px bg-[var(--color-hairline)]"></div>
+								<button type="button" class="menu-item danger" onclick={handleDeletePlan}>
+									<Trash2 size={14} strokeWidth={1.5} /> Delete plan
+								</button>
+							</div>
+						{/if}
+					</div>
 				</div>
 			</div>
 
@@ -614,6 +695,24 @@
 	.page {
 		position: relative;
 		min-height: 100dvh;
+	}
+
+	.menu-item {
+		display: flex;
+		width: 100%;
+		align-items: center;
+		gap: 10px;
+		padding: 9px 14px;
+		font-size: 13px;
+		color: var(--color-text);
+		background: transparent;
+		transition: background 140ms;
+	}
+	.menu-item:hover {
+		background: var(--color-paper-3);
+	}
+	.menu-item.danger {
+		color: var(--color-danger);
 	}
 
 	.icon-btn {
