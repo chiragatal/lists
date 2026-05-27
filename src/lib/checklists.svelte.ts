@@ -178,14 +178,30 @@ class ChecklistsStore {
 	}
 
 	async reset(checklistId: number, mode: 'all' | 'done'): Promise<Snapshot> {
-		const result = await api<{ snapshot: Snapshot; checklist: Checklist; items: ChecklistItem[] }>(
-			`/api/checklists/${checklistId}/reset`,
-			{ method: 'POST', json: { mode } }
-		);
-		this.current = result.checklist;
-		this.items = result.items;
-		this.all = this.all.map((c) => (c.id === checklistId ? result.checklist : c));
-		return result.snapshot;
+		// Optimistic: apply the reset locally so the UI responds instantly,
+		// then reconcile with the server (which also writes the snapshot).
+		const prev = this.items;
+		this.items = this.items.map((it) => {
+			if (mode === 'all' && it.state !== 'pending') return { ...it, state: 'pending' };
+			if (mode === 'done' && it.state === 'done') return { ...it, state: 'pending' };
+			return it;
+		});
+		this.recount();
+		try {
+			const result = await api<{
+				snapshot: Snapshot;
+				checklist: Checklist;
+				items: ChecklistItem[];
+			}>(`/api/checklists/${checklistId}/reset`, { method: 'POST', json: { mode } });
+			this.current = result.checklist;
+			this.items = result.items;
+			this.all = this.all.map((c) => (c.id === checklistId ? result.checklist : c));
+			return result.snapshot;
+		} catch (e) {
+			this.items = prev;
+			this.recount();
+			throw e;
+		}
 	}
 
 	async loadHistory(checklistId: number): Promise<Snapshot[]> {
