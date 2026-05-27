@@ -70,8 +70,12 @@
 			const n = await importAll(text, importMode);
 			status = {
 				kind: 'success',
-				msg: `Imported ${n} item${n === 1 ? '' : 's'} (${importMode}).`
+				msg: `Imported ${n} record${n === 1 ? '' : 's'} (${importMode}). Refreshing…`
 			};
+			// Reload so the checklists view also reflects the import.
+			setTimeout(() => {
+				if (typeof window !== 'undefined') window.location.reload();
+			}, 900);
 		} catch (e) {
 			status = { kind: 'error', msg: (e as Error).message };
 		} finally {
@@ -203,7 +207,7 @@
 						<div class="flex-1">
 							<p class="font-medium text-[var(--color-text-bright)]">Download backup</p>
 							<p class="text-xs text-[var(--color-muted)]">
-								Save all items as a JSON file you can keep.
+								Save everything — Plans and Checklists — as a JSON file you can keep.
 							</p>
 						</div>
 					</button>

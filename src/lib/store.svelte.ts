@@ -192,37 +192,24 @@ export async function renameTag(from: string, to: string) {
 }
 
 export async function exportAll(): Promise<string> {
-	// Use the in-memory items (always fresh) and shape them into the same JSON
-	// the old client used so legacy backups remain compatible.
-	const items = lists.items.map((it) => ({
-		name: it.name,
-		category: it.category,
-		tags: it.tags,
-		notes: it.notes,
-		completedAt: it.completedAt,
-		inShortlist: it.inShortlist,
-		inActive: it.inActive,
-		sortOrder: it.sortOrder,
-		createdAt: it.createdAt,
-		updatedAt: it.updatedAt
-	}));
-	return JSON.stringify({ schema: 'lists.v2', exportedAt: new Date().toISOString(), items }, null, 2);
+	// Full backup: Plans items + checklists (with items + history).
+	const data = await api<unknown>('/api/export');
+	return JSON.stringify(data, null, 2);
 }
 
 export async function importAll(jsonText: string, mode: 'replace' | 'merge' = 'merge') {
 	const parsed = JSON.parse(jsonText);
-	const items = Array.isArray(parsed?.items)
-		? parsed.items
-		: Array.isArray(parsed)
-			? parsed
-			: null;
-	if (!items) throw new Error('Invalid backup file: missing items array.');
-	const { imported } = await api<{ imported: number }>('/api/items/import', {
+	const hasItems = Array.isArray(parsed?.items) || Array.isArray(parsed);
+	const hasChecklists = Array.isArray(parsed?.checklists);
+	if (!hasItems && !hasChecklists) {
+		throw new Error('Invalid backup file: no items or checklists found.');
+	}
+	const { items, checklists } = await api<{ items: number; checklists: number }>('/api/import', {
 		method: 'POST',
-		json: { items, mode }
+		json: { data: parsed, mode }
 	});
 	await lists.load();
-	return imported;
+	return items + checklists;
 }
 
 export async function eraseAll() {
