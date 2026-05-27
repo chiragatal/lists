@@ -172,9 +172,9 @@ class ChecklistsStore {
 		});
 		const pos = new Map<number, number>();
 		orderedIds.forEach((id, idx) => pos.set(id, idx * 1000));
-		this.items = this.items.map((it) =>
-			pos.has(it.id) ? { ...it, sortOrder: pos.get(it.id)! } : it
-		);
+		this.items = this.items
+			.map((it) => (pos.has(it.id) ? { ...it, sortOrder: pos.get(it.id)! } : it))
+			.sort((a, b) => a.sortOrder - b.sortOrder);
 	}
 
 	async reset(checklistId: number, mode: 'all' | 'done'): Promise<Snapshot> {
@@ -227,5 +227,9 @@ export function groupItemsByCategory(
 	}
 	return [...map.entries()]
 		.sort(([a], [b]) => a.localeCompare(b))
-		.map(([category, items]) => ({ category, items }));
+		.map(([category, list]) => ({
+			category,
+			// Sort by manual order so reorder persists across re-renders.
+			items: [...list].sort((a, b) => a.sortOrder - b.sortOrder)
+		}));
 }

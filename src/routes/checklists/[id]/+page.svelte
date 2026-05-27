@@ -212,9 +212,16 @@
 	<div class="mx-auto max-w-xl px-5 pt-5 pb-12">
 		<header class="mb-5">
 			<div class="mb-4 flex items-center justify-between gap-3">
-				<a href="/checklists" class="icon-btn" aria-label="Back to checklists">
-					<ChevronLeft size={18} strokeWidth={1.5} />
-				</a>
+				<div class="flex min-w-0 items-center gap-2.5">
+					<a href="/checklists" class="icon-btn shrink-0" aria-label="Back to checklists">
+						<ChevronLeft size={18} strokeWidth={1.5} />
+					</a>
+					<span
+						class="truncate font-mono text-[10px] tracking-[0.24em] text-[var(--tier-color)] uppercase"
+					>
+						Checklist
+					</span>
+				</div>
 				<div class="flex shrink-0 items-center gap-1.5">
 					<button type="button" onclick={startAdd} class="add-btn" aria-label="Add item">
 						<Plus size={15} strokeWidth={2} />
@@ -263,11 +270,6 @@
 				</div>
 			</div>
 
-			<span
-				class="font-mono text-[10px] tracking-[0.24em] text-[var(--tier-color)] uppercase"
-			>
-				Checklist
-			</span>
 			{#if renaming}
 				<input
 					type="text"
@@ -277,10 +279,10 @@
 						else if (e.key === 'Escape') (renaming = false);
 					}}
 					onblur={confirmRename}
-					class="mt-1 block w-full border-b border-[var(--tier-color)] bg-transparent font-display text-4xl text-[var(--color-text-bright)] outline-none"
+					class="block w-full border-b border-[var(--tier-color)] bg-transparent font-display text-4xl text-[var(--color-text-bright)] outline-none"
 				/>
 			{:else}
-				<h1 class="mt-1 font-display text-4xl leading-tight text-[var(--color-text-bright)]">
+				<h1 class="font-display text-4xl leading-tight text-[var(--color-text-bright)]">
 					{cl?.name ?? 'Checklist'}
 				</h1>
 			{/if}
