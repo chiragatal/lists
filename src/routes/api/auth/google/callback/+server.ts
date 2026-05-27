@@ -5,6 +5,7 @@ import {
 	findOrCreateUserByEmail,
 	setSessionCookie
 } from '$lib/server/auth';
+import { resolvePendingInvites } from '$lib/server/shares';
 
 export const GET: RequestHandler = async ({ url, cookies, platform }) => {
 	const env = platform?.env;
@@ -48,6 +49,12 @@ export const GET: RequestHandler = async ({ url, cookies, platform }) => {
 	}
 
 	const user = await findOrCreateUserByEmail(env.DB, profile);
+	// Attach any pending share invites addressed to this email.
+	try {
+		await resolvePendingInvites(env.DB, user.id, user.email);
+	} catch (e) {
+		console.error('[oauth] resolve invites failed', e);
+	}
 	const session = await createSession(env.DB, user.id);
 	setSessionCookie(cookies, session.id, session.expiresAt);
 

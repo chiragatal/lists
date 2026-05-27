@@ -39,7 +39,7 @@ export async function buildExport(db: D1Database, userId: string) {
 	const planList = await listPlans(db, userId);
 	const plans = [];
 	for (const p of planList) {
-		const items = await listItems(db, userId, p.id);
+		const items = await listItems(db, p.id);
 		plans.push({
 			name: p.name,
 			createdAt: p.createdAt,

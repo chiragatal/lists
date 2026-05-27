@@ -1,5 +1,6 @@
 import { error, json, type RequestHandler } from '@sveltejs/kit';
 import { deletePlan, getPlan, renamePlan } from '$lib/server/plans';
+import { accessRole } from '$lib/server/shares';
 
 function parseId(raw: string): number {
 	const n = Number(raw);
@@ -9,9 +10,12 @@ function parseId(raw: string): number {
 
 export const GET: RequestHandler = async ({ locals, platform, params }) => {
 	if (!locals.user || !platform?.env?.DB) throw error(401, 'unauthorized');
-	const plan = await getPlan(platform.env.DB, locals.user.id, parseId(params.id!));
+	const id = parseId(params.id!);
+	const role = await accessRole(platform.env.DB, locals.user.id, 'plan', id);
+	if (!role) throw error(404, 'not found');
+	const plan = await getPlan(platform.env.DB, id);
 	if (!plan) throw error(404, 'not found');
-	return json(plan);
+	return json({ ...plan, role });
 };
 
 export const PATCH: RequestHandler = async ({ locals, platform, params, request }) => {

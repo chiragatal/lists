@@ -1,6 +1,6 @@
 import { error, json, type RequestHandler } from '@sveltejs/kit';
 import { renameCategory } from '$lib/server/items';
-import { ownsPlan } from '$lib/server/plans';
+import { accessRole, canWrite } from '$lib/server/shares';
 
 export const POST: RequestHandler = async ({ locals, platform, request }) => {
 	if (!locals.user || !platform?.env?.DB) throw error(401, 'unauthorized');
@@ -10,7 +10,9 @@ export const POST: RequestHandler = async ({ locals, platform, request }) => {
 	if (typeof body.from !== 'string' || typeof body.to !== 'string') {
 		throw error(400, 'from and to required');
 	}
-	if (!(await ownsPlan(platform.env.DB, locals.user.id, planId))) throw error(404, 'plan not found');
-	const n = await renameCategory(platform.env.DB, locals.user.id, planId, body.from, body.to);
+	const role = await accessRole(platform.env.DB, locals.user.id, 'plan', planId);
+	if (!role) throw error(404, 'plan not found');
+	if (!canWrite(role)) throw error(403, 'read-only');
+	const n = await renameCategory(platform.env.DB, planId, body.from, body.to);
 	return json({ updated: n });
 };

@@ -25,5 +25,6 @@ export {
 	Target,
 	Trash2,
 	Upload,
+	Users,
 	X
 } from '@lucide/svelte';

@@ -37,9 +37,14 @@ class ListsStore {
 	user = $state<UserSummary | null>(null);
 	currentPlanId = $state<number | null>(null);
 	currentPlanName = $state<string>('');
+	currentRole = $state<'owner' | 'editor' | 'viewer'>('owner');
 	isLoaded = $state(false); // loaded for currentPlanId
 	isLoading = $state(false);
 	error = $state<string | null>(null);
+
+	get canEdit(): boolean {
+		return this.currentRole === 'owner' || this.currentRole === 'editor';
+	}
 
 	async loadUser() {
 		if (this.user) return;
@@ -59,12 +64,15 @@ class ListsStore {
 		this.isLoading = true;
 		this.error = null;
 		try {
-			const data = await api<{ items: Item[]; plan: { id: number; name: string } }>(
-				`/api/items?plan=${planId}`
-			);
+			const data = await api<{
+				items: Item[];
+				plan: { id: number; name: string };
+				role: 'owner' | 'editor' | 'viewer';
+			}>(`/api/items?plan=${planId}`);
 			this.items = data.items;
 			this.currentPlanId = planId;
 			this.currentPlanName = data.plan?.name ?? '';
+			this.currentRole = data.role ?? 'owner';
 			this.isLoaded = true;
 		} catch (e) {
 			this.error = (e as Error).message;
@@ -168,7 +176,11 @@ export async function clearActive() {
 }
 
 export async function reorderItems(orderedIds: number[]) {
-	await api('/api/items/reorder', { method: 'POST', json: { ids: orderedIds } });
+	if (lists.currentPlanId == null) return;
+	await api('/api/items/reorder', {
+		method: 'POST',
+		json: { planId: lists.currentPlanId, ids: orderedIds }
+	});
 	const pos = new Map<number, number>();
 	orderedIds.forEach((id, idx) => pos.set(id, idx * 1000));
 	lists.items = lists.items.map((it) =>

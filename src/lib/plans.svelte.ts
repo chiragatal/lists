@@ -4,6 +4,9 @@ export type Plan = {
 	sortOrder: number;
 	createdAt: number;
 	updatedAt: number;
+	role: 'owner' | 'editor' | 'viewer';
+	shared: boolean;
+	ownerEmail?: string;
 	counts: { total: number; active: number; shortlist: number; library: number };
 };
 

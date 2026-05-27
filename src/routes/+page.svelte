@@ -127,7 +127,17 @@
 					<li>
 						<a href="/plans/{p.id}" class="card block rounded-xl border px-4 py-3.5">
 							<div class="flex items-baseline justify-between gap-3">
-								<p class="truncate font-display text-lg text-[var(--color-text-bright)]">{p.name}</p>
+								<p class="flex min-w-0 items-center gap-2">
+									<span class="truncate font-display text-lg text-[var(--color-text-bright)]">{p.name}</span>
+									{#if p.shared}
+										<span
+											class="shrink-0 rounded-full border border-[var(--color-hairline-strong)] px-1.5 py-0.5 font-mono text-[8px] tracking-[0.14em] text-[var(--color-muted)] uppercase"
+											title={p.ownerEmail ? `Shared by ${p.ownerEmail}` : 'Shared with you'}
+										>
+											Shared · {p.role}
+										</span>
+									{/if}
+								</p>
 								<span class="shrink-0 font-mono text-[11px] tabular-nums text-[var(--color-muted)]">
 									{p.counts.active} active
 								</span>

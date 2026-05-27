@@ -9,9 +9,10 @@
 		onEdit: (item: Item) => void;
 		onTagTap: (tag: string) => void;
 		selectedTags: string[];
+		canEdit?: boolean;
 	};
 
-	let { item, tier, onEdit, onTagTap, selectedTags }: Props = $props();
+	let { item, tier, onEdit, onTagTap, selectedTags, canEdit = true }: Props = $props();
 
 	const current = $derived(tierOf(item));
 
@@ -93,7 +94,9 @@
 	</div>
 
 	<div class="flex shrink-0 items-center gap-1 pl-1">
-		{#if tier === 'active'}
+		{#if !canEdit}
+			<!-- viewer: no edit controls -->
+		{:else if tier === 'active'}
 			<button
 				type="button"
 				onclick={go('shortlist')}

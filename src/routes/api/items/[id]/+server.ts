@@ -1,5 +1,6 @@
 import { error, json, type RequestHandler } from '@sveltejs/kit';
-import { deleteItem, updateItem, type UpdateInput } from '$lib/server/items';
+import { deleteItem, getItemPlanId, updateItem, type UpdateInput } from '$lib/server/items';
+import { accessRole, canWrite } from '$lib/server/shares';
 
 function parseId(raw: string): number {
 	const n = Number(raw);
@@ -7,9 +8,18 @@ function parseId(raw: string): number {
 	return n;
 }
 
+async function requireWritableItem(db: App.Platform['env']['DB'], userId: string, itemId: number) {
+	const planId = await getItemPlanId(db, itemId);
+	if (planId == null) throw error(404, 'not found');
+	const role = await accessRole(db, userId, 'plan', planId);
+	if (!role) throw error(404, 'not found');
+	if (!canWrite(role)) throw error(403, 'read-only');
+}
+
 export const PATCH: RequestHandler = async ({ locals, platform, params, request }) => {
 	if (!locals.user || !platform?.env?.DB) throw error(401, 'unauthorized');
 	const id = parseId(params.id!);
+	await requireWritableItem(platform.env.DB, locals.user.id, id);
 	const body = (await request.json()) as Record<string, unknown>;
 
 	const patch: UpdateInput = {};
@@ -25,7 +35,7 @@ export const PATCH: RequestHandler = async ({ locals, platform, params, request 
 	if (body.inActive === 0 || body.inActive === 1) patch.inActive = body.inActive;
 	if (typeof body.sortOrder === 'number') patch.sortOrder = body.sortOrder;
 
-	const updated = await updateItem(platform.env.DB, locals.user.id, id, patch);
+	const updated = await updateItem(platform.env.DB, id, patch);
 	if (!updated) throw error(404, 'not found');
 	return json(updated);
 };
@@ -33,7 +43,8 @@ export const PATCH: RequestHandler = async ({ locals, platform, params, request 
 export const DELETE: RequestHandler = async ({ locals, platform, params }) => {
 	if (!locals.user || !platform?.env?.DB) throw error(401, 'unauthorized');
 	const id = parseId(params.id!);
-	const ok = await deleteItem(platform.env.DB, locals.user.id, id);
+	await requireWritableItem(platform.env.DB, locals.user.id, id);
+	const ok = await deleteItem(platform.env.DB, id);
 	if (!ok) throw error(404, 'not found');
 	return new Response(null, { status: 204 });
 };

@@ -15,10 +15,11 @@
 		open: boolean;
 		item?: Item | null;
 		defaultTier: Tier;
+		canEdit?: boolean;
 		onClose: () => void;
 	};
 
-	let { open, item = null, defaultTier, onClose }: Props = $props();
+	let { open, item = null, defaultTier, canEdit = true, onClose }: Props = $props();
 
 	let name = $state('');
 	let category = $state('');
@@ -331,7 +332,7 @@
 			<footer
 				class="flex items-center justify-between gap-2 border-t border-[var(--color-hairline)] bg-[var(--color-paper-2)] px-5 py-3"
 			>
-				{#if item}
+				{#if item && canEdit}
 					<button
 						type="button"
 						onclick={remove}
@@ -340,7 +341,9 @@
 						<Trash2 size={13} strokeWidth={1.5} /> Delete
 					</button>
 				{:else}
-					<span></span>
+					<span class="font-mono text-[10px] tracking-wide text-[var(--color-faint)] uppercase">
+						{canEdit ? '' : 'View only'}
+					</span>
 				{/if}
 				<div class="flex gap-2">
 					<button
@@ -348,16 +351,18 @@
 						onclick={onClose}
 						class="rounded-md px-3 py-1.5 text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]"
 					>
-						Cancel
+						{canEdit ? 'Cancel' : 'Close'}
 					</button>
-					<button
-						type="button"
-						onclick={save}
-						disabled={!name.trim() || !category.trim() || saving}
-						class="rounded-md bg-[var(--color-emerald)] px-4 py-1.5 text-xs font-semibold tracking-wide text-[var(--color-ink-deep)] uppercase transition-opacity hover:bg-[var(--color-emerald-bright)] disabled:opacity-30"
-					>
-						{saving ? 'Saving…' : 'Save'}
-					</button>
+					{#if canEdit}
+						<button
+							type="button"
+							onclick={save}
+							disabled={!name.trim() || !category.trim() || saving}
+							class="rounded-md bg-[var(--color-emerald)] px-4 py-1.5 text-xs font-semibold tracking-wide text-[var(--color-ink-deep)] uppercase transition-opacity hover:bg-[var(--color-emerald-bright)] disabled:opacity-30"
+						>
+							{saving ? 'Saving…' : 'Save'}
+						</button>
+					{/if}
 				</div>
 			</footer>
 		</div>

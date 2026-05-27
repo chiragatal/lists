@@ -48,32 +48,32 @@ export function rowToItem(row: Row): ApiItem {
 	};
 }
 
-export async function listItems(
-	db: D1Database,
-	userId: string,
-	planId: number
-): Promise<ApiItem[]> {
+export async function listItems(db: D1Database, planId: number): Promise<ApiItem[]> {
 	const result = await db
-		.prepare(
-			`SELECT ${COLS} FROM items WHERE user_id = ? AND plan_id = ? ORDER BY sort_order ASC, id ASC`
-		)
-		.bind(userId, planId)
+		.prepare(`SELECT ${COLS} FROM items WHERE plan_id = ? ORDER BY sort_order ASC, id ASC`)
+		.bind(planId)
 		.all<Row>();
 	return (result.results ?? []).map(rowToItem);
 }
 
-export async function getItem(db: D1Database, userId: string, id: number): Promise<ApiItem | null> {
-	const row = await db
-		.prepare(`SELECT ${COLS} FROM items WHERE user_id = ? AND id = ?`)
-		.bind(userId, id)
-		.first<Row>();
+export async function getItem(db: D1Database, id: number): Promise<ApiItem | null> {
+	const row = await db.prepare(`SELECT ${COLS} FROM items WHERE id = ?`).bind(id).first<Row>();
 	return row ? rowToItem(row) : null;
 }
 
-async function nextSortOrder(db: D1Database, userId: string, planId: number): Promise<number> {
+/** The plan an item belongs to — for access checks on item-level ops. */
+export async function getItemPlanId(db: D1Database, id: number): Promise<number | null> {
 	const r = await db
-		.prepare('SELECT MAX(sort_order) AS max FROM items WHERE user_id = ? AND plan_id = ?')
-		.bind(userId, planId)
+		.prepare('SELECT plan_id AS pid FROM items WHERE id = ?')
+		.bind(id)
+		.first<{ pid: number | null }>();
+	return r?.pid ?? null;
+}
+
+async function nextSortOrder(db: D1Database, planId: number): Promise<number> {
+	const r = await db
+		.prepare('SELECT MAX(sort_order) AS max FROM items WHERE plan_id = ?')
+		.bind(planId)
 		.first<{ max: number | null }>();
 	return (r?.max ?? 0) + 1000;
 }
@@ -97,7 +97,7 @@ export async function createItem(
 	input: CreateInput
 ): Promise<ApiItem> {
 	const now = Date.now();
-	const sortOrder = input.sortOrder ?? (await nextSortOrder(db, userId, planId));
+	const sortOrder = input.sortOrder ?? (await nextSortOrder(db, planId));
 	const tier = input.tier ?? 'library';
 	const inShortlist = tier === 'shortlist' ? 1 : 0;
 	const inActive = tier === 'active' ? 1 : 0;
@@ -139,7 +139,6 @@ export type UpdateInput = Partial<{
 
 export async function updateItem(
 	db: D1Database,
-	userId: string,
 	id: number,
 	patch: UpdateInput
 ): Promise<ApiItem | null> {
@@ -179,32 +178,26 @@ export async function updateItem(
 	}
 	setParts.push('updated_at = ?');
 	args.push(Date.now());
-	args.push(userId, id);
+	args.push(id);
 
 	const row = await db
-		.prepare(
-			`UPDATE items SET ${setParts.join(', ')} WHERE user_id = ? AND id = ? RETURNING ${COLS}`
-		)
+		.prepare(`UPDATE items SET ${setParts.join(', ')} WHERE id = ? RETURNING ${COLS}`)
 		.bind(...args)
 		.first<Row>();
 	return row ? rowToItem(row) : null;
 }
 
-export async function deleteItem(db: D1Database, userId: string, id: number): Promise<boolean> {
-	const r = await db
-		.prepare('DELETE FROM items WHERE user_id = ? AND id = ?')
-		.bind(userId, id)
-		.run();
+export async function deleteItem(db: D1Database, id: number): Promise<boolean> {
+	const r = await db.prepare('DELETE FROM items WHERE id = ?').bind(id).run();
 	return (r.meta.changes ?? 0) > 0;
 }
 
 export async function setTier(
 	db: D1Database,
-	userId: string,
 	id: number,
 	tier: 'library' | 'shortlist' | 'active'
 ): Promise<ApiItem | null> {
-	const item = await getItem(db, userId, id);
+	const item = await getItem(db, id);
 	if (!item) return null;
 	const wasActiveOrShortlist = item.inActive === 1 || item.inShortlist === 1;
 	const inShortlist: 0 | 1 = tier === 'shortlist' ? 1 : 0;
@@ -215,29 +208,25 @@ export async function setTier(
 	if (tier === 'library' && wasActiveOrShortlist) {
 		patch.completedAt = [...(item.completedAt ?? []), Date.now()];
 	}
-	return updateItem(db, userId, id, patch);
+	return updateItem(db, id, patch);
 }
 
-export async function clearActive(
-	db: D1Database,
-	userId: string,
-	planId: number
-): Promise<number> {
+export async function clearActive(db: D1Database, planId: number): Promise<number> {
 	const r = await db
 		.prepare(
-			'UPDATE items SET in_active = 0, in_shortlist = 0, updated_at = ? WHERE user_id = ? AND plan_id = ? AND in_active = 1'
+			'UPDATE items SET in_active = 0, in_shortlist = 0, updated_at = ? WHERE plan_id = ? AND in_active = 1'
 		)
-		.bind(Date.now(), userId, planId)
+		.bind(Date.now(), planId)
 		.run();
 	return r.meta.changes ?? 0;
 }
 
-export async function reorderItems(db: D1Database, userId: string, orderedIds: number[]) {
+export async function reorderItems(db: D1Database, planId: number, orderedIds: number[]) {
 	const now = Date.now();
 	const statements = orderedIds.map((id, idx) =>
 		db
-			.prepare('UPDATE items SET sort_order = ?, updated_at = ? WHERE user_id = ? AND id = ?')
-			.bind(idx * 1000, now, userId, id)
+			.prepare('UPDATE items SET sort_order = ?, updated_at = ? WHERE plan_id = ? AND id = ?')
+			.bind(idx * 1000, now, planId, id)
 	);
 	if (statements.length === 0) return;
 	await db.batch(statements);
@@ -245,19 +234,17 @@ export async function reorderItems(db: D1Database, userId: string, orderedIds: n
 
 export async function removeCompletion(
 	db: D1Database,
-	userId: string,
 	id: number,
 	ts: number
 ): Promise<ApiItem | null> {
-	const item = await getItem(db, userId, id);
+	const item = await getItem(db, id);
 	if (!item) return null;
 	const next = (item.completedAt ?? []).filter((t) => t !== ts);
-	return updateItem(db, userId, id, { completedAt: next });
+	return updateItem(db, id, { completedAt: next });
 }
 
 export async function renameCategory(
 	db: D1Database,
-	userId: string,
 	planId: number,
 	from: string,
 	to: string
@@ -266,16 +253,15 @@ export async function renameCategory(
 	if (!trimmed || trimmed === from) return 0;
 	const r = await db
 		.prepare(
-			'UPDATE items SET category = ?, updated_at = ? WHERE user_id = ? AND plan_id = ? AND category = ?'
+			'UPDATE items SET category = ?, updated_at = ? WHERE plan_id = ? AND category = ?'
 		)
-		.bind(trimmed, Date.now(), userId, planId, from)
+		.bind(trimmed, Date.now(), planId, from)
 		.run();
 	return r.meta.changes ?? 0;
 }
 
 export async function renameTag(
 	db: D1Database,
-	userId: string,
 	planId: number,
 	from: string,
 	to: string
@@ -284,8 +270,8 @@ export async function renameTag(
 	if (!trimmed || trimmed === from) return 0;
 	// SQLite JSON path: we update each row that has the tag.
 	const rows = await db
-		.prepare(`SELECT ${COLS} FROM items WHERE user_id = ? AND plan_id = ?`)
-		.bind(userId, planId)
+		.prepare(`SELECT ${COLS} FROM items WHERE plan_id = ?`)
+		.bind(planId)
 		.all<Row>();
 	const affected: { id: number; tags: string[] }[] = [];
 	for (const r of rows.results ?? []) {
@@ -298,8 +284,8 @@ export async function renameTag(
 	const now = Date.now();
 	const statements = affected.map((a) =>
 		db
-			.prepare('UPDATE items SET tags = ?, updated_at = ? WHERE user_id = ? AND id = ?')
-			.bind(JSON.stringify(a.tags), now, userId, a.id)
+			.prepare('UPDATE items SET tags = ?, updated_at = ? WHERE id = ?')
+			.bind(JSON.stringify(a.tags), now, a.id)
 	);
 	await db.batch(statements);
 	return affected.length;
@@ -317,7 +303,7 @@ export async function bulkImport(
 	items: CreateInput[]
 ): Promise<number> {
 	if (items.length === 0) return 0;
-	const base = await nextSortOrder(db, userId, planId);
+	const base = await nextSortOrder(db, planId);
 	const now = Date.now();
 	const statements = items.map((it, idx) => {
 		const tier = it.tier ?? 'library';

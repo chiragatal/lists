@@ -21,10 +21,12 @@
 		MoreHorizontal,
 		Pencil,
 		Trash2,
-		Check
+		Check,
+		Users
 	} from './icons';
 	import { ui } from './ui.svelte';
 	import ItemEditor from './ItemEditor.svelte';
+	import ShareSheet from './ShareSheet.svelte';
 	import ItemCard from './ItemCard.svelte';
 	import CategoryChips from './CategoryChips.svelte';
 	import TagFilter from './TagFilter.svelte';
@@ -61,6 +63,17 @@
 	let menuOpen = $state(false);
 	let renaming = $state(false);
 	let renameValue = $state('');
+	let shareOpen = $state(false);
+
+	const isOwner = $derived(lists.currentRole === 'owner');
+	const canEdit = $derived(lists.canEdit);
+
+	async function handleLeave() {
+		menuOpen = false;
+		if (!confirm(`Leave "${lists.currentPlanName}"? You'll lose access until re-shared.`)) return;
+		await fetch(`/api/plans/${planId}/leave`, { method: 'POST' });
+		await goto('/');
+	}
 
 	function startRename() {
 		menuOpen = false;
@@ -226,7 +239,9 @@
 	$effect(() => {
 		dndList = filtered;
 	});
-	const dragDisabled = $derived(groupingMode !== 'none' || hasFilters || tier === 'active');
+	const dragDisabled = $derived(
+		groupingMode !== 'none' || hasFilters || tier === 'active' || !canEdit
+	);
 
 	function handleDndConsider(e: CustomEvent<DndEvent<Item>>) {
 		dndList = e.detail.items;
@@ -285,12 +300,21 @@
 							{lists.currentPlanName || 'Plan'}
 						</span>
 					{/if}
+					{#if !isOwner}
+						<span
+							class="shrink-0 rounded-full border border-[var(--color-hairline-strong)] px-1.5 py-0.5 font-mono text-[9px] tracking-[0.14em] text-[var(--color-muted)] uppercase"
+						>
+							{lists.currentRole}
+						</span>
+					{/if}
 				</div>
 				<div class="flex shrink-0 items-center gap-1.5">
-					<button type="button" onclick={openNew} class="add-btn" aria-label="Add new item">
-						<Plus size={15} strokeWidth={2} />
-						<span class="add-label">Add</span>
-					</button>
+					{#if canEdit}
+						<button type="button" onclick={openNew} class="add-btn" aria-label="Add new item">
+							<Plus size={15} strokeWidth={2} />
+							<span class="add-label">Add</span>
+						</button>
+					{/if}
 					<div class="relative">
 						<button
 							type="button"
@@ -312,9 +336,21 @@
 							<div
 								class="menu absolute right-0 z-30 mt-1.5 w-48 overflow-hidden rounded-lg border border-[var(--color-hairline-strong)] bg-[var(--color-paper-2)] shadow-xl"
 							>
-								<button type="button" class="menu-item" onclick={startRename}>
-									<Pencil size={14} strokeWidth={1.5} /> Rename
-								</button>
+								{#if isOwner}
+									<button type="button" class="menu-item" onclick={startRename}>
+										<Pencil size={14} strokeWidth={1.5} /> Rename
+									</button>
+									<button
+										type="button"
+										class="menu-item"
+										onclick={() => {
+											menuOpen = false;
+											shareOpen = true;
+										}}
+									>
+										<Users size={14} strokeWidth={1.5} /> Share
+									</button>
+								{/if}
 								<button
 									type="button"
 									class="menu-item"
@@ -325,13 +361,21 @@
 								>
 									<History size={14} strokeWidth={1.5} /> History
 								</button>
-								<button type="button" class="menu-item" onclick={handleClearActive}>
-									<Check size={14} strokeWidth={1.75} /> Clear active
-								</button>
+								{#if canEdit}
+									<button type="button" class="menu-item" onclick={handleClearActive}>
+										<Check size={14} strokeWidth={1.75} /> Clear active
+									</button>
+								{/if}
 								<div class="h-px bg-[var(--color-hairline)]"></div>
-								<button type="button" class="menu-item danger" onclick={handleDeletePlan}>
-									<Trash2 size={14} strokeWidth={1.5} /> Delete plan
-								</button>
+								{#if isOwner}
+									<button type="button" class="menu-item danger" onclick={handleDeletePlan}>
+										<Trash2 size={14} strokeWidth={1.5} /> Delete plan
+									</button>
+								{:else}
+									<button type="button" class="menu-item danger" onclick={handleLeave}>
+										<X size={14} strokeWidth={1.75} /> Leave plan
+									</button>
+								{/if}
 							</div>
 						{/if}
 					</div>
@@ -603,6 +647,7 @@
 														onEdit={openEdit}
 														onTagTap={onTagTap}
 														selectedTags={selectedTags}
+										canEdit={canEdit}
 													/>
 												</li>
 											{/each}
@@ -618,6 +663,7 @@
 													onEdit={openEdit}
 													onTagTap={onTagTap}
 													selectedTags={selectedTags}
+										canEdit={canEdit}
 												/>
 											</li>
 										{/each}
@@ -652,6 +698,7 @@
 							onEdit={openEdit}
 							onTagTap={onTagTap}
 							selectedTags={selectedTags}
+										canEdit={canEdit}
 						/>
 					</li>
 				{/each}
@@ -664,7 +711,16 @@
 	open={editorOpen}
 	item={editing}
 	defaultTier={tier}
+	canEdit={canEdit}
 	onClose={() => (editorOpen = false)}
+/>
+
+<ShareSheet
+	open={shareOpen}
+	objectType="plan"
+	objectId={planId}
+	title={lists.currentPlanName}
+	onClose={() => (shareOpen = false)}
 />
 
 <TagFilter
