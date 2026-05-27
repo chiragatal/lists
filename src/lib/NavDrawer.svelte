@@ -2,26 +2,37 @@
 	import { page } from '$app/state';
 	import { ui } from './ui.svelte';
 	import { lists, signOut } from './store.svelte';
-	import { Crosshair, ListChecks, Settings, X } from './icons';
+	import { plans } from './plans.svelte';
+	import { checklists } from './checklists.svelte';
+	import { Crosshair, ListChecks, Settings, X, ChevronRight } from './icons';
 
-	const onPlans = $derived(
-		page.url.pathname === '/' || page.url.pathname.startsWith('/plans')
-	);
+	// Load the lists for the drawer whenever it opens.
+	$effect(() => {
+		if (!ui.menuOpen) return;
+		if (!plans.loaded && !plans.loading) plans.loadIndex();
+		if (!checklists.indexLoaded && !checklists.indexLoading) checklists.loadIndex();
+	});
+
+	const onPlans = $derived(page.url.pathname === '/' || page.url.pathname.startsWith('/plans'));
 	const onChecklists = $derived(page.url.pathname.startsWith('/checklists'));
-	function go(_href: string) {
+	const currentPlanId = $derived(page.url.pathname.match(/^\/plans\/(\d+)/)?.[1] ?? null);
+	const currentChecklistId = $derived(
+		page.url.pathname.match(/^\/checklists\/(\d+)/)?.[1] ?? null
+	);
+
+	function close() {
 		ui.closeMenu();
-		// Anchor handles navigation; this just closes the drawer.
 	}
 </script>
 
 {#if ui.menuOpen}
 	<div
 		class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
-		onclick={() => ui.closeMenu()}
+		onclick={close}
 		role="presentation"
 	>
 		<nav
-			class="drawer flex h-full w-[78%] max-w-xs flex-col border-r border-[var(--color-hairline-strong)] bg-[var(--color-paper)]"
+			class="drawer flex h-full w-[80%] max-w-xs flex-col border-r border-[var(--color-hairline-strong)] bg-[var(--color-paper)]"
 			onclick={(e) => e.stopPropagation()}
 			aria-label="Main menu"
 		>
@@ -31,7 +42,7 @@
 				<p class="font-display text-2xl leading-none text-[var(--color-text-bright)]">Lists</p>
 				<button
 					type="button"
-					onclick={() => ui.closeMenu()}
+					onclick={close}
 					class="-mr-1.5 rounded-md p-1.5 text-[var(--color-muted)] hover:text-[var(--color-text)]"
 					aria-label="Close menu"
 				>
@@ -39,25 +50,69 @@
 				</button>
 			</header>
 
-			<div class="flex-1 overflow-y-auto p-3 scrollbar-thin">
-				<a href="/" onclick={() => go('/')} class="nav-item" class:active={onPlans}>
-					<Crosshair size={17} strokeWidth={1.5} />
+			<div class="flex-1 overflow-y-auto px-3 py-3 scrollbar-thin">
+				<!-- PLANS -->
+				<a href="/" onclick={close} class="section-head" class:active={onPlans}>
+					<Crosshair size={16} strokeWidth={1.5} />
 					<span class="flex-1">Plans</span>
+					<ChevronRight size={14} strokeWidth={1.5} class="text-[var(--color-faint)]" />
 				</a>
-				<a
-					href="/checklists"
-					onclick={() => go('/checklists')}
-					class="nav-item"
-					class:active={onChecklists}
-				>
-					<ListChecks size={17} strokeWidth={1.5} />
+				<ul class="mb-3 ml-2 border-l border-[var(--color-hairline)] pl-2">
+					{#each plans.all as p (p.id)}
+						<li>
+							<a
+								href="/plans/{p.id}"
+								onclick={close}
+								class="sub-item"
+								class:active={currentPlanId === String(p.id)}
+							>
+								<span class="flex-1 truncate">{p.name}</span>
+								<span
+									class="font-mono text-[10px] tabular-nums"
+									class:text-[var(--color-emerald)]={p.counts.active > 0}
+									class:text-[var(--color-faint)]={p.counts.active === 0}
+								>
+									{p.counts.active}
+								</span>
+							</a>
+						</li>
+					{/each}
+					{#if plans.loaded && plans.all.length === 0}
+						<li class="px-2 py-1.5 text-xs text-[var(--color-faint)]">No plans yet</li>
+					{/if}
+				</ul>
+
+				<!-- CHECKLISTS -->
+				<a href="/checklists" onclick={close} class="section-head" class:active={onChecklists}>
+					<ListChecks size={16} strokeWidth={1.5} />
 					<span class="flex-1">Checklists</span>
+					<ChevronRight size={14} strokeWidth={1.5} class="text-[var(--color-faint)]" />
 				</a>
+				<ul class="mb-3 ml-2 border-l border-[var(--color-hairline)] pl-2">
+					{#each checklists.all as c (c.id)}
+						<li>
+							<a
+								href="/checklists/{c.id}"
+								onclick={close}
+								class="sub-item"
+								class:active={currentChecklistId === String(c.id)}
+							>
+								<span class="flex-1 truncate">{c.name}</span>
+								<span class="font-mono text-[10px] tabular-nums text-[var(--color-faint)]">
+									{c.counts.done + c.counts.skipped}/{c.counts.total}
+								</span>
+							</a>
+						</li>
+					{/each}
+					{#if checklists.indexLoaded && checklists.all.length === 0}
+						<li class="px-2 py-1.5 text-xs text-[var(--color-faint)]">No checklists yet</li>
+					{/if}
+				</ul>
 
-				<div class="my-3 h-px bg-[var(--color-hairline)]"></div>
+				<div class="my-2 h-px bg-[var(--color-hairline)]"></div>
 
-				<button type="button" onclick={() => ui.openSettings()} class="nav-item w-full">
-					<Settings size={17} strokeWidth={1.5} />
+				<button type="button" onclick={() => ui.openSettings()} class="section-head w-full">
+					<Settings size={16} strokeWidth={1.5} />
 					<span class="flex-1 text-left">Settings</span>
 				</button>
 			</div>
@@ -117,28 +172,47 @@
 		}
 	}
 
-	.nav-item {
+	.section-head {
 		display: flex;
 		align-items: center;
 		gap: 12px;
 		padding: 10px 12px;
 		border-radius: 0.625rem;
-		color: var(--color-muted);
+		color: var(--color-text);
 		font-family: var(--font-display);
-		font-variation-settings: 'wght' 520;
+		font-variation-settings: 'wght' 560;
 		font-size: 15px;
 		letter-spacing: -0.01em;
 		background: transparent;
 		transition: background 160ms, color 160ms;
 	}
-	.nav-item:hover {
+	.section-head:hover {
 		background: var(--color-paper-2);
 		color: var(--color-text-bright);
 	}
-	.nav-item.active {
+	.section-head.active {
+		color: var(--color-text-bright);
+	}
+
+	.sub-item {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 7px 10px;
+		border-radius: 0.5rem;
+		color: var(--color-muted);
+		font-size: 13px;
+		transition: background 140ms, color 140ms;
+	}
+	.sub-item:hover {
+		background: var(--color-paper-2);
+		color: var(--color-text);
+	}
+	.sub-item.active {
 		background: var(--color-paper-2);
 		color: var(--color-text-bright);
 	}
+
 	@media (prefers-reduced-motion: reduce) {
 		.drawer {
 			animation: none;

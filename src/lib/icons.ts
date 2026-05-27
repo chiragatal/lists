@@ -3,6 +3,7 @@ export {
 	Bookmark,
 	Check,
 	ChevronLeft,
+	ChevronRight,
 	Crosshair,
 	Dices,
 	Download,

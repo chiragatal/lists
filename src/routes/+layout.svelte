@@ -5,6 +5,7 @@
 	import { Bookmark, Crosshair, Library } from '$lib/icons';
 	import { requestPersistentStorage } from '$lib/backup.svelte';
 	import { ui } from '$lib/ui.svelte';
+	import { lists } from '$lib/store.svelte';
 	import NavDrawer from '$lib/NavDrawer.svelte';
 	import SettingsSheet from '$lib/SettingsSheet.svelte';
 
@@ -12,6 +13,8 @@
 
 	onMount(() => {
 		requestPersistentStorage();
+		// Login gate runs server-side; if we reached a page, we're authed.
+		if (!page.url.pathname.startsWith('/login')) lists.loadUser();
 	});
 
 	// The bottom nav shows only inside a plan, scoped to that plan's tiers.
