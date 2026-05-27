@@ -38,7 +38,9 @@
 		}
 	];
 
-	const hideNav = $derived(page.url.pathname.startsWith('/login'));
+	const hideNav = $derived(
+		page.url.pathname.startsWith('/login') || page.url.pathname.startsWith('/checklists')
+	);
 </script>
 
 <div class="flex min-h-dvh flex-col">

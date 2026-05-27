@@ -9,6 +9,7 @@
 			page.url.pathname.startsWith('/shortlist') ||
 			page.url.pathname.startsWith('/library')
 	);
+	const onChecklists = $derived(page.url.pathname.startsWith('/checklists'));
 	function go(_href: string) {
 		ui.closeMenu();
 		// Anchor handles navigation; this just closes the drawer.
@@ -45,11 +46,15 @@
 					<Crosshair size={17} strokeWidth={1.5} />
 					<span class="flex-1">Plans</span>
 				</a>
-				<button type="button" class="nav-item w-full cursor-default opacity-55" disabled>
+				<a
+					href="/checklists"
+					onclick={() => go('/checklists')}
+					class="nav-item"
+					class:active={onChecklists}
+				>
 					<ListChecks size={17} strokeWidth={1.5} />
-					<span class="flex-1 text-left">Checklists</span>
-					<span class="soon">Soon</span>
-				</button>
+					<span class="flex-1">Checklists</span>
+				</a>
 
 				<div class="my-3 h-px bg-[var(--color-hairline)]"></div>
 
@@ -136,17 +141,6 @@
 		background: var(--color-paper-2);
 		color: var(--color-text-bright);
 	}
-	.soon {
-		font-family: var(--font-mono);
-		font-size: 9px;
-		letter-spacing: 0.16em;
-		text-transform: uppercase;
-		color: var(--color-faint);
-		border: 1px solid var(--color-hairline);
-		border-radius: 9999px;
-		padding: 2px 6px;
-	}
-
 	@media (prefers-reduced-motion: reduce) {
 		.drawer {
 			animation: none;

@@ -1,0 +1,256 @@
+<script lang="ts">
+	import { goto } from '$app/navigation';
+	import { checklists } from '$lib/checklists.svelte';
+	import { ui } from '$lib/ui.svelte';
+	import { Menu, Plus, ListChecks, X } from '$lib/icons';
+
+	$effect(() => {
+		checklists.loadIndex();
+	});
+
+	const loading = $derived(!checklists.indexLoaded);
+
+	let creating = $state(false);
+	let newName = $state('');
+	let busy = $state(false);
+	let nameInput = $state<HTMLInputElement | null>(null);
+
+	function startCreate() {
+		creating = true;
+		newName = '';
+		queueMicrotask(() => nameInput?.focus());
+	}
+
+	async function confirmCreate() {
+		const n = newName.trim();
+		if (!n || busy) return;
+		busy = true;
+		try {
+			const id = await checklists.createChecklist(n);
+			creating = false;
+			await goto(`/checklists/${id}`);
+		} finally {
+			busy = false;
+		}
+	}
+
+	function resolved(c: { counts: { done: number; skipped: number; total: number } }) {
+		return c.counts.done + c.counts.skipped;
+	}
+
+	function pct(c: { counts: { done: number; skipped: number; total: number } }) {
+		if (c.counts.total === 0) return 0;
+		return Math.round((resolved(c) / c.counts.total) * 100);
+	}
+
+	function relativeReset(ts: number | null): string {
+		if (!ts) return 'never reset';
+		const diff = Date.now() - ts;
+		if (diff < 86_400_000) return 'reset today';
+		if (diff < 2 * 86_400_000) return 'reset yesterday';
+		if (diff < 7 * 86_400_000) return `reset ${Math.floor(diff / 86_400_000)}d ago`;
+		return `reset ${new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
+	}
+</script>
+
+<svelte:head>
+	<title>Checklists · Lists</title>
+</svelte:head>
+
+<div class="page tier-active">
+	<div class="mx-auto max-w-xl px-5 pt-5 pb-12">
+		<header class="mb-5">
+			<div class="mb-4 flex items-center justify-between gap-3">
+				<div class="flex min-w-0 items-center gap-2.5">
+					<button
+						type="button"
+						onclick={() => ui.openMenu()}
+						class="icon-btn shrink-0"
+						aria-label="Menu"
+					>
+						<Menu size={16} strokeWidth={1.5} />
+					</button>
+					<span
+						class="truncate font-mono text-[10px] tracking-[0.24em] text-[var(--tier-color)] uppercase"
+					>
+						Checklists
+					</span>
+				</div>
+				<button type="button" onclick={startCreate} class="add-btn" aria-label="New checklist">
+					<Plus size={15} strokeWidth={2} />
+					<span>New</span>
+				</button>
+			</div>
+			<h1 class="font-display text-5xl leading-[0.95] text-[var(--color-text-bright)]">
+				Checklists
+			</h1>
+			<p class="mt-2 max-w-xs text-[13px] leading-snug text-[var(--color-muted)]">
+				Reusable lists you tick through, then reset.
+			</p>
+		</header>
+
+		{#if creating}
+			<div
+				class="mb-4 flex items-center gap-2 rounded-xl border border-[var(--tier-color)] bg-[var(--color-paper)] px-3.5 py-3"
+			>
+				<ListChecks size={16} strokeWidth={1.5} class="text-[var(--tier-color)]" />
+				<input
+					bind:this={nameInput}
+					type="text"
+					bind:value={newName}
+					placeholder="Checklist name…"
+					onkeydown={(e) => {
+						if (e.key === 'Enter') confirmCreate();
+						else if (e.key === 'Escape') (creating = false);
+					}}
+					class="flex-1 bg-transparent text-sm text-[var(--color-text-bright)] outline-none placeholder:text-[var(--color-faint)]"
+				/>
+				<button
+					type="button"
+					onclick={confirmCreate}
+					disabled={!newName.trim() || busy}
+					class="rounded-md bg-[var(--tier-color)] px-3 py-1 font-mono text-[10px] tracking-[0.14em] text-[var(--color-ink-deep)] uppercase disabled:opacity-40"
+				>
+					Create
+				</button>
+				<button
+					type="button"
+					onclick={() => (creating = false)}
+					class="rounded-md p-1 text-[var(--color-muted)] hover:text-[var(--color-text)]"
+					aria-label="Cancel"
+				>
+					<X size={15} strokeWidth={1.5} />
+				</button>
+			</div>
+		{/if}
+
+		{#if loading}
+			<ul class="space-y-2">
+				{#each Array(3) as _, i}
+					<li class="skeleton-card" style="--d: {i * 90}ms"></li>
+				{/each}
+			</ul>
+		{:else if checklists.all.length === 0}
+			<div
+				class="rounded-2xl border border-dashed border-[var(--color-hairline-strong)] bg-[var(--color-paper)]/40 px-6 py-12 text-center"
+			>
+				<p class="font-mono text-[10px] tracking-[0.22em] text-[var(--tier-color)] uppercase">
+					No checklists yet
+				</p>
+				<p class="mx-auto mt-3 max-w-xs text-sm leading-relaxed text-[var(--color-muted)]">
+					Make one for anything you repeat — packing for a trip, a gym bag, a launch routine.
+				</p>
+				<button
+					type="button"
+					onclick={startCreate}
+					class="mt-5 inline-flex items-center gap-1.5 rounded-full border border-[var(--tier-color)] px-3.5 py-1.5 font-mono text-[10px] tracking-[0.18em] text-[var(--tier-color)] uppercase transition-colors hover:bg-[color-mix(in_oklab,var(--tier-color)_15%,transparent)]"
+				>
+					<Plus size={12} strokeWidth={2} /> New checklist
+				</button>
+			</div>
+		{:else}
+			<ul class="space-y-2">
+				{#each checklists.all as c (c.id)}
+					<li>
+						<a href="/checklists/{c.id}" class="card block rounded-xl border px-4 py-3.5">
+							<div class="flex items-baseline justify-between gap-3">
+								<p class="truncate font-display text-lg text-[var(--color-text-bright)]">
+									{c.name}
+								</p>
+								<span class="shrink-0 font-mono text-[11px] tabular-nums text-[var(--color-muted)]">
+									{resolved(c)}/{c.counts.total}
+								</span>
+							</div>
+							<div class="mt-2.5 h-1 overflow-hidden rounded-full bg-[var(--color-paper-3)]">
+								<div
+									class="h-full rounded-full bg-[var(--tier-color)] transition-all"
+									style="width: {pct(c)}%"
+								></div>
+							</div>
+							<div
+								class="mt-2 flex items-center gap-3 font-mono text-[10px] tracking-wide text-[var(--color-faint)] uppercase"
+							>
+								<span class="text-[var(--color-emerald)]">{c.counts.done} done</span>
+								<span class="text-[var(--color-slate)]">{c.counts.skipped} skipped</span>
+								<span class="ml-auto normal-case">{relativeReset(c.lastResetAt)}</span>
+							</div>
+						</a>
+					</li>
+				{/each}
+			</ul>
+		{/if}
+	</div>
+</div>
+
+<style>
+	.page {
+		position: relative;
+		min-height: 100dvh;
+	}
+	.icon-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 34px;
+		height: 34px;
+		border-radius: 0.5rem;
+		border: 1px solid var(--color-hairline);
+		background: var(--color-paper);
+		color: var(--color-muted);
+		transition: color 200ms, border-color 200ms;
+	}
+	.icon-btn:hover {
+		color: var(--color-text);
+		border-color: var(--color-hairline-strong);
+	}
+	.add-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		height: 34px;
+		padding: 0 12px 0 10px;
+		border-radius: 0.5rem;
+		background: var(--tier-color);
+		color: var(--color-ink-deep);
+		font-family: var(--font-mono);
+		font-size: 11px;
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		font-variation-settings: 'wght' 600;
+		transition: background 200ms, transform 120ms;
+	}
+	.add-btn:active {
+		transform: scale(0.96);
+	}
+	.card {
+		background: var(--color-paper);
+		border-color: var(--color-hairline);
+		transition: border-color 160ms;
+	}
+	.card:hover {
+		border-color: var(--color-hairline-strong);
+	}
+	.skeleton-card {
+		height: 84px;
+		border-radius: 0.75rem;
+		border: 1px solid var(--color-hairline);
+		background: linear-gradient(
+			100deg,
+			var(--color-paper) 0%,
+			var(--color-paper-2) 50%,
+			var(--color-paper) 100%
+		);
+		background-size: 200% 100%;
+		animation: shimmer 1.6s ease-in-out infinite;
+		animation-delay: var(--d, 0ms);
+	}
+	@keyframes shimmer {
+		0%,
+		100% {
+			background-position: 200% 0;
+		}
+		50% {
+			background-position: 0 0;
+		}
+	}
+</style>
