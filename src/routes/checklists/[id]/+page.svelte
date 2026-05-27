@@ -19,10 +19,12 @@
 		X,
 		Check,
 		GripVertical,
-		LayoutList
+		LayoutList,
+		Users
 	} from '$lib/icons';
 	import { ui } from '$lib/ui.svelte';
 	import ChecklistHistorySheet from '$lib/ChecklistHistorySheet.svelte';
+	import ShareSheet from '$lib/ShareSheet.svelte';
 
 	const id = $derived(Number(page.params.id));
 
@@ -33,6 +35,16 @@
 	const loading = $derived(checklists.detailLoading);
 	const cl = $derived(checklists.current);
 	const items = $derived(checklists.items);
+	const canEdit = $derived(checklists.canEdit);
+	const isOwner = $derived(checklists.currentRole === 'owner');
+	let shareOpen = $state(false);
+
+	async function handleLeave() {
+		menuOpen = false;
+		if (!confirm(`Leave "${cl?.name}"? You'll lose access until re-shared.`)) return;
+		await fetch(`/api/checklists/${id}/leave`, { method: 'POST' });
+		await goto('/checklists');
+	}
 
 	type SortMode = 'in-place' | 'by-category' | 'by-status';
 	let sortMode = $state<SortMode>('in-place');
@@ -211,7 +223,7 @@
 </svelte:head>
 
 {#snippet row(it: ChecklistItem, draggable: boolean)}
-	{#if draggable}
+	{#if draggable && canEdit}
 		<span
 			class="flex h-7 w-5 shrink-0 cursor-grab items-center justify-center text-[var(--color-faint)] active:cursor-grabbing"
 			aria-hidden="true"
@@ -221,15 +233,22 @@
 	{:else}
 		<span class="w-5 shrink-0" aria-hidden="true"></span>
 	{/if}
-	<button type="button" onclick={() => openItemEdit(it)} class="min-w-0 flex-1 text-left">
-		<span class="item-name text-[15px] text-[var(--color-text-bright)]">{it.name}</span>
-	</button>
+	{#if canEdit}
+		<button type="button" onclick={() => openItemEdit(it)} class="min-w-0 flex-1 text-left">
+			<span class="item-name text-[15px] text-[var(--color-text-bright)]">{it.name}</span>
+		</button>
+	{:else}
+		<span class="min-w-0 flex-1">
+			<span class="item-name text-[15px] text-[var(--color-text-bright)]">{it.name}</span>
+		</span>
+	{/if}
 	<div class="flex shrink-0 items-center gap-1.5">
 		<button
 			type="button"
 			onclick={() => toggle(it, 'done')}
 			class="state-btn done"
 			class:on={it.state === 'done'}
+			disabled={!canEdit}
 			aria-label="Mark done"
 			title="Done"
 		>
@@ -240,6 +259,7 @@
 			onclick={() => toggle(it, 'skipped')}
 			class="state-btn skip"
 			class:on={it.state === 'skipped'}
+			disabled={!canEdit}
 			aria-label="Don't need"
 			title="Don't need"
 		>
@@ -266,12 +286,21 @@
 					>
 						Checklist
 					</span>
+					{#if !isOwner}
+						<span
+							class="shrink-0 rounded-full border border-[var(--color-hairline-strong)] px-1.5 py-0.5 font-mono text-[9px] tracking-[0.14em] text-[var(--color-muted)] uppercase"
+						>
+							{checklists.currentRole}
+						</span>
+					{/if}
 				</div>
 				<div class="flex shrink-0 items-center gap-1.5">
-					<button type="button" onclick={startAdd} class="add-btn" aria-label="Add item">
-						<Plus size={15} strokeWidth={2} />
-						<span>Add</span>
-					</button>
+					{#if canEdit}
+						<button type="button" onclick={startAdd} class="add-btn" aria-label="Add item">
+							<Plus size={15} strokeWidth={2} />
+							<span>Add</span>
+						</button>
+					{/if}
 					<button
 						type="button"
 						onclick={cycleSort}
@@ -301,23 +330,40 @@
 							<div
 								class="menu absolute right-0 z-30 mt-1.5 w-48 overflow-hidden rounded-lg border border-[var(--color-hairline-strong)] bg-[var(--color-paper-2)] shadow-xl"
 							>
-								<button type="button" class="menu-item" onclick={startRename}>
-									<Pencil size={14} strokeWidth={1.5} /> Rename
-								</button>
+								{#if isOwner}
+									<button type="button" class="menu-item" onclick={startRename}>
+										<Pencil size={14} strokeWidth={1.5} /> Rename
+									</button>
+									<button
+										type="button"
+										class="menu-item"
+										onclick={() => { menuOpen = false; shareOpen = true; }}
+									>
+										<Users size={14} strokeWidth={1.5} /> Share
+									</button>
+								{/if}
 								<button type="button" class="menu-item" onclick={() => { menuOpen = false; historyOpen = true; }}>
 									<History size={14} strokeWidth={1.5} /> History
 								</button>
+								{#if canEdit}
+									<div class="h-px bg-[var(--color-hairline)]"></div>
+									<button type="button" class="menu-item" onclick={() => handleReset('done')}>
+										<Check size={14} strokeWidth={1.75} /> Clear done
+									</button>
+									<button type="button" class="menu-item" onclick={() => handleReset('all')}>
+										<X size={14} strokeWidth={1.75} /> Reset all
+									</button>
+								{/if}
 								<div class="h-px bg-[var(--color-hairline)]"></div>
-								<button type="button" class="menu-item" onclick={() => handleReset('done')}>
-									<Check size={14} strokeWidth={1.75} /> Clear done
-								</button>
-								<button type="button" class="menu-item" onclick={() => handleReset('all')}>
-									<X size={14} strokeWidth={1.75} /> Reset all
-								</button>
-								<div class="h-px bg-[var(--color-hairline)]"></div>
-								<button type="button" class="menu-item danger" onclick={handleDelete}>
-									<Trash2 size={14} strokeWidth={1.5} /> Delete checklist
-								</button>
+								{#if isOwner}
+									<button type="button" class="menu-item danger" onclick={handleDelete}>
+										<Trash2 size={14} strokeWidth={1.5} /> Delete checklist
+									</button>
+								{:else}
+									<button type="button" class="menu-item danger" onclick={handleLeave}>
+										<X size={14} strokeWidth={1.75} /> Leave checklist
+									</button>
+								{/if}
 							</div>
 						{/if}
 					</div>
@@ -420,13 +466,15 @@
 				<p class="mx-auto max-w-xs text-sm leading-relaxed text-[var(--color-muted)]">
 					This checklist is empty. Add items — group them with a category like "Documents" or "Clothes".
 				</p>
-				<button
-					type="button"
-					onclick={startAdd}
-					class="mt-5 inline-flex items-center gap-1.5 rounded-full border border-[var(--tier-color)] px-3.5 py-1.5 font-mono text-[10px] tracking-[0.18em] text-[var(--tier-color)] uppercase"
-				>
-					<Plus size={12} strokeWidth={2} /> Add item
-				</button>
+				{#if canEdit}
+					<button
+						type="button"
+						onclick={startAdd}
+						class="mt-5 inline-flex items-center gap-1.5 rounded-full border border-[var(--tier-color)] px-3.5 py-1.5 font-mono text-[10px] tracking-[0.18em] text-[var(--tier-color)] uppercase"
+					>
+						<Plus size={12} strokeWidth={2} /> Add item
+					</button>
+				{/if}
 			</div>
 		{:else}
 			<div
@@ -503,6 +551,7 @@
 										items: dndItems[g.category] ?? g.draggable,
 										flipDurationMs: 200,
 										type: `cl-${g.category}`,
+										dragDisabled: !canEdit,
 										dropTargetStyle: {},
 										dropTargetClasses: ['dnd-drop-target']
 									}}
@@ -620,6 +669,14 @@
 {/if}
 
 <ChecklistHistorySheet open={historyOpen} checklistId={id} onClose={() => (historyOpen = false)} />
+
+<ShareSheet
+	open={shareOpen}
+	objectType="checklist"
+	objectId={id}
+	title={cl?.name ?? 'Checklist'}
+	onClose={() => (shareOpen = false)}
+/>
 
 <style>
 	.page {

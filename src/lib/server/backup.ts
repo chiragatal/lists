@@ -50,8 +50,8 @@ export async function buildExport(db: D1Database, userId: string) {
 	const cls = await listChecklists(db, userId);
 	const checklists = [];
 	for (const c of cls) {
-		const detail = await getChecklist(db, userId, c.id);
-		const snaps = await listSnapshots(db, userId, c.id);
+		const detail = await getChecklist(db, c.id);
+		const snaps = await listSnapshots(db, c.id);
 		checklists.push({
 			name: c.name,
 			lastResetAt: c.lastResetAt,

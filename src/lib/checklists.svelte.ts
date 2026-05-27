@@ -7,6 +7,9 @@ export type Checklist = {
 	lastResetAt: number | null;
 	createdAt: number;
 	updatedAt: number;
+	role?: 'owner' | 'editor' | 'viewer';
+	shared?: boolean;
+	ownerEmail?: string;
 	counts: { total: number; done: number; skipped: number; pending: number };
 };
 
@@ -61,8 +64,13 @@ class ChecklistsStore {
 	// Active checklist detail
 	current = $state<Checklist | null>(null);
 	items = $state<ChecklistItem[]>([]);
+	currentRole = $state<'owner' | 'editor' | 'viewer'>('owner');
 	detailLoading = $state(false);
 	detailError = $state<string | null>(null);
+
+	get canEdit(): boolean {
+		return this.currentRole === 'owner' || this.currentRole === 'editor';
+	}
 
 	async loadIndex() {
 		this.indexLoading = true;
@@ -81,11 +89,14 @@ class ChecklistsStore {
 		this.current = null;
 		this.items = [];
 		try {
-			const data = await api<{ checklist: Checklist; items: ChecklistItem[] }>(
-				`/api/checklists/${id}`
-			);
+			const data = await api<{
+				checklist: Checklist;
+				items: ChecklistItem[];
+				role: 'owner' | 'editor' | 'viewer';
+			}>(`/api/checklists/${id}`);
 			this.current = data.checklist;
 			this.items = data.items;
+			this.currentRole = data.role ?? 'owner';
 		} catch (e) {
 			this.detailError = (e as Error).message;
 		} finally {

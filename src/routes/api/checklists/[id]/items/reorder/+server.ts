@@ -1,5 +1,6 @@
 import { error, json, type RequestHandler } from '@sveltejs/kit';
 import { reorderItems } from '$lib/server/checklists';
+import { accessRole, canWrite } from '$lib/server/shares';
 
 export const POST: RequestHandler = async ({ locals, platform, params, request }) => {
 	if (!locals.user || !platform?.env?.DB) throw error(401, 'unauthorized');
@@ -9,6 +10,9 @@ export const POST: RequestHandler = async ({ locals, platform, params, request }
 	if (!Array.isArray(body.ids) || !body.ids.every((n) => Number.isFinite(n))) {
 		throw error(400, 'ids array required');
 	}
-	await reorderItems(platform.env.DB, locals.user.id, checklistId, body.ids);
+	const role = await accessRole(platform.env.DB, locals.user.id, 'checklist', checklistId);
+	if (!role) throw error(404, 'checklist not found');
+	if (!canWrite(role)) throw error(403, 'read-only');
+	await reorderItems(platform.env.DB, checklistId, body.ids);
 	return json({ ok: true });
 };

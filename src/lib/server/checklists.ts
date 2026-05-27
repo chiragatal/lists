@@ -1,4 +1,5 @@
 import type { D1Database } from '@cloudflare/workers-types';
+import { sharedObjectIds, type Role } from './shares';
 
 export type ChecklistState = 'pending' | 'done' | 'skipped';
 
@@ -9,6 +10,9 @@ export type ApiChecklist = {
 	lastResetAt: number | null;
 	createdAt: number;
 	updatedAt: number;
+	role: Role;
+	shared: boolean;
+	ownerEmail?: string;
 	counts: { total: number; done: number; skipped: number; pending: number };
 };
 
@@ -70,18 +74,13 @@ function toItem(r: ItemRow): ApiChecklistItem {
 	};
 }
 
-export async function listChecklists(db: D1Database, userId: string): Promise<ApiChecklist[]> {
-	const lists = await db
-		.prepare(
-			'SELECT id, name, sort_order, last_reset_at, created_at, updated_at FROM checklists WHERE user_id = ? ORDER BY sort_order ASC, id ASC'
-		)
-		.bind(userId)
-		.all<ChecklistRow>();
-
-	const rows = lists.results ?? [];
-	if (rows.length === 0) return [];
-
-	// Aggregate counts per checklist in one query.
+async function countsForChecklists(
+	db: D1Database,
+	ids: number[]
+): Promise<Map<number, { total: number; done: number; skipped: number; pending: number }>> {
+	const countMap = new Map<number, { total: number; done: number; skipped: number; pending: number }>();
+	if (ids.length === 0) return countMap;
+	const placeholders = ids.map(() => '?').join(',');
 	const counts = await db
 		.prepare(
 			`SELECT checklist_id,
@@ -89,12 +88,10 @@ export async function listChecklists(db: D1Database, userId: string): Promise<Ap
 			        SUM(CASE WHEN state = 'done' THEN 1 ELSE 0 END) AS done,
 			        SUM(CASE WHEN state = 'skipped' THEN 1 ELSE 0 END) AS skipped,
 			        SUM(CASE WHEN state = 'pending' THEN 1 ELSE 0 END) AS pending
-			   FROM checklist_items WHERE user_id = ? GROUP BY checklist_id`
+			   FROM checklist_items WHERE checklist_id IN (${placeholders}) GROUP BY checklist_id`
 		)
-		.bind(userId)
+		.bind(...ids)
 		.all<{ checklist_id: number; total: number; done: number; skipped: number; pending: number }>();
-
-	const countMap = new Map<number, { total: number; done: number; skipped: number; pending: number }>();
 	for (const c of counts.results ?? []) {
 		countMap.set(c.checklist_id, {
 			total: c.total,
@@ -103,28 +100,81 @@ export async function listChecklists(db: D1Database, userId: string): Promise<Ap
 			pending: c.pending ?? 0
 		});
 	}
+	return countMap;
+}
 
-	return rows.map((r) => ({
+export async function listChecklists(db: D1Database, userId: string): Promise<ApiChecklist[]> {
+	const owned = await db
+		.prepare(
+			'SELECT id, name, sort_order, last_reset_at, created_at, updated_at FROM checklists WHERE user_id = ? ORDER BY sort_order ASC, id ASC'
+		)
+		.bind(userId)
+		.all<ChecklistRow>();
+	const ownedRows = owned.results ?? [];
+
+	const shares = await sharedObjectIds(db, userId, 'checklist');
+	const sharedRows: (ChecklistRow & { ownerEmail: string; role: Role })[] = [];
+	if (shares.length > 0) {
+		const ids = shares.map((s) => s.id);
+		const rows = await db
+			.prepare(
+				`SELECT c.id, c.name, c.sort_order, c.last_reset_at, c.created_at, c.updated_at, u.email AS owner_email
+				   FROM checklists c JOIN users u ON u.id = c.user_id
+				  WHERE c.id IN (${ids.map(() => '?').join(',')})`
+			)
+			.bind(...ids)
+			.all<ChecklistRow & { owner_email: string }>();
+		const roleById = new Map(shares.map((s) => [s.id, s.role]));
+		for (const r of rows.results ?? []) {
+			sharedRows.push({ ...r, ownerEmail: r.owner_email, role: roleById.get(r.id) ?? 'viewer' });
+		}
+	}
+
+	const countMap = await countsForChecklists(db, [
+		...ownedRows.map((r) => r.id),
+		...sharedRows.map((r) => r.id)
+	]);
+	const counts = (id: number) =>
+		countMap.get(id) ?? { total: 0, done: 0, skipped: 0, pending: 0 };
+
+	const ownedLists: ApiChecklist[] = ownedRows.map((r) => ({
 		id: r.id,
 		name: r.name,
 		sortOrder: r.sort_order,
 		lastResetAt: r.last_reset_at,
 		createdAt: r.created_at,
 		updatedAt: r.updated_at,
-		counts: countMap.get(r.id) ?? { total: 0, done: 0, skipped: 0, pending: 0 }
+		role: 'owner' as Role,
+		shared: false,
+		counts: counts(r.id)
 	}));
+	const sharedLists: ApiChecklist[] = sharedRows
+		.sort((a, b) => a.name.localeCompare(b.name))
+		.map((r) => ({
+			id: r.id,
+			name: r.name,
+			sortOrder: r.sort_order,
+			lastResetAt: r.last_reset_at,
+			createdAt: r.created_at,
+			updatedAt: r.updated_at,
+			role: r.role,
+			shared: true,
+			ownerEmail: r.ownerEmail,
+			counts: counts(r.id)
+		}));
+
+	return [...ownedLists, ...sharedLists];
 }
 
 export async function getChecklist(
 	db: D1Database,
-	userId: string,
 	id: number
 ): Promise<{ checklist: ApiChecklist; items: ApiChecklistItem[] } | null> {
 	const row = await db
 		.prepare(
-			'SELECT id, name, sort_order, last_reset_at, created_at, updated_at FROM checklists WHERE user_id = ? AND id = ?'
+			'SELECT id, name, sort_order, last_reset_at, created_at, updated_at FROM checklists WHERE id = ?'
 		)
-		.bind(userId, id)
+		.bind(id)
 		.first<ChecklistRow>();
 	if (!row) return null;
 
@@ -147,10 +197,31 @@ export async function getChecklist(
 			lastResetAt: row.last_reset_at,
 			createdAt: row.created_at,
 			updatedAt: row.updated_at,
+			role: 'owner',
+			shared: false,
 			counts
 		},
 		items
 	};
+}
+
+export async function getItemChecklistId(db: D1Database, itemId: number): Promise<number | null> {
+	const r = await db
+		.prepare('SELECT checklist_id AS cid FROM checklist_items WHERE id = ?')
+		.bind(itemId)
+		.first<{ cid: number | null }>();
+	return r?.cid ?? null;
+}
+
+export async function getSnapshotChecklistId(
+	db: D1Database,
+	snapshotId: number
+): Promise<number | null> {
+	const r = await db
+		.prepare('SELECT checklist_id AS cid FROM checklist_snapshots WHERE id = ?')
+		.bind(snapshotId)
+		.first<{ cid: number | null }>();
+	return r?.cid ?? null;
 }
 
 async function nextChecklistSortOrder(db: D1Database, userId: string): Promise<number> {
@@ -190,6 +261,8 @@ export async function createChecklist(
 		lastResetAt: row.last_reset_at,
 		createdAt: row.created_at,
 		updatedAt: row.updated_at,
+		role: 'owner',
+		shared: false,
 		counts: { total: 0, done: 0, skipped: 0, pending: 0 }
 	};
 }
@@ -212,15 +285,9 @@ export async function deleteChecklist(db: D1Database, userId: string, id: number
 		.prepare('DELETE FROM checklists WHERE user_id = ? AND id = ?')
 		.bind(userId, id)
 		.run();
-	return (r.meta.changes ?? 0) > 0;
-}
-
-async function ownsChecklist(db: D1Database, userId: string, checklistId: number): Promise<boolean> {
-	const r = await db
-		.prepare('SELECT 1 AS ok FROM checklists WHERE user_id = ? AND id = ?')
-		.bind(userId, checklistId)
-		.first<{ ok: number }>();
-	return !!r;
+	if ((r.meta.changes ?? 0) === 0) return false;
+	await db.prepare("DELETE FROM shares WHERE object_type = 'checklist' AND object_id = ?").bind(id).run();
+	return true;
 }
 
 export async function addItem(
@@ -229,7 +296,6 @@ export async function addItem(
 	checklistId: number,
 	input: { name: string; category?: string }
 ): Promise<ApiChecklistItem | null> {
-	if (!(await ownsChecklist(db, userId, checklistId))) return null;
 	const now = Date.now();
 	const sortOrder = await nextItemSortOrder(db, checklistId);
 	const row = await db
@@ -252,7 +318,6 @@ export async function addItem(
 
 export async function updateItem(
 	db: D1Database,
-	userId: string,
 	itemId: number,
 	patch: { name?: string; category?: string; state?: ChecklistState }
 ): Promise<ApiChecklistItem | null> {
@@ -272,38 +337,33 @@ export async function updateItem(
 	}
 	if (setParts.length === 0) return null;
 	setParts.push('updated_at = ?');
-	args.push(Date.now(), userId, itemId);
+	args.push(Date.now(), itemId);
 
 	const row = await db
 		.prepare(
-			`UPDATE checklist_items SET ${setParts.join(', ')} WHERE user_id = ? AND id = ? RETURNING ${ITEM_COLS}`
+			`UPDATE checklist_items SET ${setParts.join(', ')} WHERE id = ? RETURNING ${ITEM_COLS}`
 		)
 		.bind(...args)
 		.first<ItemRow>();
 	return row ? toItem(row) : null;
 }
 
-export async function deleteItem(db: D1Database, userId: string, itemId: number): Promise<boolean> {
+export async function deleteItem(db: D1Database, itemId: number): Promise<boolean> {
 	const r = await db
-		.prepare('DELETE FROM checklist_items WHERE user_id = ? AND id = ?')
-		.bind(userId, itemId)
+		.prepare('DELETE FROM checklist_items WHERE id = ?')
+		.bind(itemId)
 		.run();
 	return (r.meta.changes ?? 0) > 0;
 }
 
-export async function reorderItems(
-	db: D1Database,
-	userId: string,
-	checklistId: number,
-	orderedIds: number[]
-) {
+export async function reorderItems(db: D1Database, checklistId: number, orderedIds: number[]) {
 	const now = Date.now();
 	const statements = orderedIds.map((id, idx) =>
 		db
 			.prepare(
-				'UPDATE checklist_items SET sort_order = ?, updated_at = ? WHERE user_id = ? AND checklist_id = ? AND id = ?'
+				'UPDATE checklist_items SET sort_order = ?, updated_at = ? WHERE checklist_id = ? AND id = ?'
 			)
-			.bind(idx * 1000, now, userId, checklistId, id)
+			.bind(idx * 1000, now, checklistId, id)
 	);
 	if (statements.length) await db.batch(statements);
 }
@@ -314,7 +374,7 @@ export async function resetChecklist(
 	checklistId: number,
 	mode: 'all' | 'done'
 ): Promise<{ snapshot: ApiSnapshot; checklist: ApiChecklist; items: ApiChecklistItem[] } | null> {
-	const current = await getChecklist(db, userId, checklistId);
+	const current = await getChecklist(db, checklistId);
 	if (!current) return null;
 
 	const now = Date.now();
@@ -364,7 +424,7 @@ export async function resetChecklist(
 		.bind(now, now, checklistId)
 		.run();
 
-	const after = await getChecklist(db, userId, checklistId);
+	const after = await getChecklist(db, checklistId);
 	const snapshot: ApiSnapshot = {
 		id: snapRow!.id,
 		createdAt: snapRow!.created_at,
@@ -378,28 +438,23 @@ export async function resetChecklist(
 	return { snapshot, checklist: after!.checklist, items: after!.items };
 }
 
-export async function deleteSnapshot(
-	db: D1Database,
-	userId: string,
-	snapshotId: number
-): Promise<boolean> {
+export async function deleteSnapshot(db: D1Database, snapshotId: number): Promise<boolean> {
 	const r = await db
-		.prepare('DELETE FROM checklist_snapshots WHERE user_id = ? AND id = ?')
-		.bind(userId, snapshotId)
+		.prepare('DELETE FROM checklist_snapshots WHERE id = ?')
+		.bind(snapshotId)
 		.run();
 	return (r.meta.changes ?? 0) > 0;
 }
 
 export async function listSnapshots(
 	db: D1Database,
-	userId: string,
 	checklistId: number
 ): Promise<ApiSnapshot[]> {
 	const res = await db
 		.prepare(
-			'SELECT id, created_at, reason, done_count, skipped_count, pending_count, total, items_json FROM checklist_snapshots WHERE user_id = ? AND checklist_id = ? ORDER BY created_at DESC'
+			'SELECT id, created_at, reason, done_count, skipped_count, pending_count, total, items_json FROM checklist_snapshots WHERE checklist_id = ? ORDER BY created_at DESC'
 		)
-		.bind(userId, checklistId)
+		.bind(checklistId)
 		.all<{
 			id: number;
 			created_at: number;
