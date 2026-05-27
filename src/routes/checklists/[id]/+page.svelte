@@ -7,6 +7,8 @@
 		type ChecklistItem,
 		type ChecklistState
 	} from '$lib/checklists.svelte';
+	import { dndzone, type DndEvent } from 'svelte-dnd-action';
+	import { flip } from 'svelte/animate';
 	import {
 		ChevronLeft,
 		Plus,
@@ -15,7 +17,8 @@
 		Trash2,
 		Pencil,
 		X,
-		Check
+		Check,
+		GripVertical
 	} from '$lib/icons';
 	import ChecklistHistorySheet from '$lib/ChecklistHistorySheet.svelte';
 
@@ -28,7 +31,40 @@
 	const loading = $derived(checklists.detailLoading);
 	const cl = $derived(checklists.current);
 	const items = $derived(checklists.items);
-	const groups = $derived(groupItemsByCategory(items));
+
+	// Group by category, then split by status (pending → done → skipped).
+	// Items arrive sorted by sortOrder, so each sublist keeps manual order.
+	const groups = $derived(
+		groupItemsByCategory(items).map((g) => ({
+			category: g.category,
+			pending: g.items.filter((i) => i.state === 'pending'),
+			done: g.items.filter((i) => i.state === 'done'),
+			skipped: g.items.filter((i) => i.state === 'skipped')
+		}))
+	);
+
+	// Mutable mirror of each category's pending items for drag-to-reorder.
+	let pendingDnd = $state<Record<string, ChecklistItem[]>>({});
+	$effect(() => {
+		const m: Record<string, ChecklistItem[]> = {};
+		for (const g of groups) m[g.category] = g.pending;
+		pendingDnd = m;
+	});
+
+	function handleConsider(category: string, e: CustomEvent<DndEvent<ChecklistItem>>) {
+		pendingDnd = { ...pendingDnd, [category]: e.detail.items };
+	}
+	async function handleFinalize(category: string, e: CustomEvent<DndEvent<ChecklistItem>>) {
+		pendingDnd = { ...pendingDnd, [category]: e.detail.items };
+		const fullIds: number[] = [];
+		for (const g of groups) {
+			for (const it of pendingDnd[g.category] ?? g.pending) fullIds.push(it.id);
+			for (const it of g.done) fullIds.push(it.id);
+			for (const it of g.skipped) fullIds.push(it.id);
+		}
+		await checklists.reorderItems(id, fullIds);
+	}
+
 	const counts = $derived(cl?.counts ?? { total: 0, done: 0, skipped: 0, pending: 0 });
 	const resolved = $derived(counts.done + counts.skipped);
 	const pct = $derived(counts.total === 0 ? 0 : Math.round((resolved / counts.total) * 100));
@@ -134,6 +170,44 @@
 	<title>{cl?.name ?? 'Checklist'} · Lists</title>
 </svelte:head>
 
+{#snippet row(it: ChecklistItem, draggable: boolean)}
+	{#if draggable}
+		<span
+			class="flex h-7 w-5 shrink-0 cursor-grab items-center justify-center text-[var(--color-faint)] active:cursor-grabbing"
+			aria-hidden="true"
+		>
+			<GripVertical size={14} strokeWidth={1.5} />
+		</span>
+	{:else}
+		<span class="w-5 shrink-0" aria-hidden="true"></span>
+	{/if}
+	<button type="button" onclick={() => openItemEdit(it)} class="min-w-0 flex-1 text-left">
+		<span class="item-name text-[15px] text-[var(--color-text-bright)]">{it.name}</span>
+	</button>
+	<div class="flex shrink-0 items-center gap-1.5">
+		<button
+			type="button"
+			onclick={() => toggle(it, 'done')}
+			class="state-btn done"
+			class:on={it.state === 'done'}
+			aria-label="Mark done"
+			title="Done"
+		>
+			<Check size={15} strokeWidth={2} />
+		</button>
+		<button
+			type="button"
+			onclick={() => toggle(it, 'skipped')}
+			class="state-btn skip"
+			class:on={it.state === 'skipped'}
+			aria-label="Don't need"
+			title="Don't need"
+		>
+			<X size={15} strokeWidth={2} />
+		</button>
+	</div>
+{/snippet}
+
 <div class="page tier-active">
 	<div class="mx-auto max-w-xl px-5 pt-5 pb-12">
 		<header class="mb-5">
@@ -156,6 +230,13 @@
 							<MoreHorizontal size={16} strokeWidth={1.5} />
 						</button>
 						{#if menuOpen}
+							<button
+								type="button"
+								class="fixed inset-0 z-20 cursor-default"
+								onclick={() => (menuOpen = false)}
+								aria-label="Close menu"
+								tabindex="-1"
+							></button>
 							<div
 								class="menu absolute right-0 z-30 mt-1.5 w-48 overflow-hidden rounded-lg border border-[var(--color-hairline-strong)] bg-[var(--color-paper-2)] shadow-xl"
 							>
@@ -293,7 +374,7 @@
 			</div>
 		{:else}
 			<div class="space-y-6">
-				{#each groups as g}
+				{#each groups as g (g.category)}
 					<section>
 						{#if g.category && g.category !== '—'}
 							<div class="mb-2.5 flex items-baseline gap-3">
@@ -305,46 +386,54 @@
 								<div class="h-px flex-1 bg-[var(--color-hairline)]"></div>
 							</div>
 						{/if}
-						<ul class="space-y-1.5">
-							{#each g.items as it (it.id)}
-								<li
-									class="item-row flex items-center gap-3 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-paper)] px-3.5 py-2.5"
-									data-state={it.state}
-								>
-									<button
-										type="button"
-										onclick={() => openItemEdit(it)}
-										class="min-w-0 flex-1 text-left"
+
+						<!-- Pending: draggable to reorder -->
+						{#if (pendingDnd[g.category] ?? g.pending).length}
+							<ul
+								class="space-y-1.5"
+								use:dndzone={{
+									items: pendingDnd[g.category] ?? g.pending,
+									flipDurationMs: 200,
+									type: `cl-${g.category}`,
+									dropTargetStyle: {},
+									dropTargetClasses: ['dnd-drop-target']
+								}}
+								onconsider={(e) => handleConsider(g.category, e)}
+								onfinalize={(e) => handleFinalize(g.category, e)}
+							>
+								{#each pendingDnd[g.category] ?? g.pending as it (it.id)}
+									<li
+										animate:flip={{ duration: 200 }}
+										class="item-row flex items-center gap-2 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-paper)] px-3 py-2.5"
+										data-state={it.state}
 									>
-										<span class="item-name text-[15px] text-[var(--color-text-bright)]">
-											{it.name}
-										</span>
-									</button>
-									<div class="flex shrink-0 items-center gap-1.5">
-										<button
-											type="button"
-											onclick={() => toggle(it, 'done')}
-											class="state-btn done"
-											class:on={it.state === 'done'}
-											aria-label="Mark done"
-											title="Done"
-										>
-											<Check size={15} strokeWidth={2} />
-										</button>
-										<button
-											type="button"
-											onclick={() => toggle(it, 'skipped')}
-											class="state-btn skip"
-											class:on={it.state === 'skipped'}
-											aria-label="Don't need"
-											title="Don't need"
-										>
-											<X size={15} strokeWidth={2} />
-										</button>
-									</div>
-								</li>
-							{/each}
-						</ul>
+										{@render row(it, true)}
+									</li>
+								{/each}
+							</ul>
+						{/if}
+
+						<!-- Resolved: done then skipped, static -->
+						{#if g.done.length || g.skipped.length}
+							<ul class="mt-1.5 space-y-1.5">
+								{#each g.done as it (it.id)}
+									<li
+										class="item-row flex items-center gap-2 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-paper)] px-3 py-2.5"
+										data-state={it.state}
+									>
+										{@render row(it, false)}
+									</li>
+								{/each}
+								{#each g.skipped as it (it.id)}
+									<li
+										class="item-row flex items-center gap-2 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-paper)] px-3 py-2.5"
+										data-state={it.state}
+									>
+										{@render row(it, false)}
+									</li>
+								{/each}
+							</ul>
+						{/if}
 					</section>
 				{/each}
 			</div>

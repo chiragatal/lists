@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { checklists, type Snapshot } from './checklists.svelte';
-	import { History, X } from './icons';
+	import { History, X, Trash2 } from './icons';
 
 	type Props = {
 		open: boolean;
@@ -35,6 +35,20 @@
 
 	function reasonLabel(r: string): string {
 		return r === 'reset_all' ? 'Reset all' : r === 'clear_done' ? 'Cleared done' : r;
+	}
+
+	let deleting = $state<number | null>(null);
+	async function removeSnapshot(snapshotId: number) {
+		if (deleting) return;
+		if (!confirm('Delete this history entry?')) return;
+		deleting = snapshotId;
+		try {
+			await checklists.deleteSnapshot(checklistId, snapshotId);
+			snapshots = snapshots.filter((s) => s.id !== snapshotId);
+			if (expanded === snapshotId) expanded = null;
+		} finally {
+			deleting = null;
+		}
 	}
 </script>
 
@@ -92,27 +106,39 @@
 					<ul class="space-y-1.5">
 						{#each snapshots as s (s.id)}
 							<li class="overflow-hidden rounded-xl border border-[var(--color-hairline)] bg-[var(--color-paper-2)]">
-								<button
-									type="button"
-									onclick={() => (expanded = expanded === s.id ? null : s.id)}
-									class="flex w-full items-center gap-3 px-3.5 py-3 text-left"
-								>
-									<div class="min-w-0 flex-1">
-										<p class="text-sm text-[var(--color-text-bright)]">{fmt(s.createdAt)}</p>
-										<p
-											class="mt-0.5 font-mono text-[10px] tracking-wide text-[var(--color-faint)] uppercase"
-										>
-											{reasonLabel(s.reason)}
-										</p>
-									</div>
-									<div class="flex shrink-0 items-center gap-2.5 font-mono text-[11px] tabular-nums">
-										<span class="text-[var(--color-emerald)]">{s.doneCount}✓</span>
-										<span class="text-[var(--color-slate)]">{s.skippedCount}✗</span>
-										{#if s.pendingCount > 0}
-											<span class="text-[var(--color-faint)]">{s.pendingCount}○</span>
-										{/if}
-									</div>
-								</button>
+								<div class="flex w-full items-center gap-2 px-3.5 py-3">
+									<button
+										type="button"
+										onclick={() => (expanded = expanded === s.id ? null : s.id)}
+										class="flex min-w-0 flex-1 items-center gap-3 text-left"
+									>
+										<div class="min-w-0 flex-1">
+											<p class="text-sm text-[var(--color-text-bright)]">{fmt(s.createdAt)}</p>
+											<p
+												class="mt-0.5 font-mono text-[10px] tracking-wide text-[var(--color-faint)] uppercase"
+											>
+												{reasonLabel(s.reason)}
+											</p>
+										</div>
+										<div class="flex shrink-0 items-center gap-2.5 font-mono text-[11px] tabular-nums">
+											<span class="text-[var(--color-emerald)]">{s.doneCount}✓</span>
+											<span class="text-[var(--color-slate)]">{s.skippedCount}✗</span>
+											{#if s.pendingCount > 0}
+												<span class="text-[var(--color-faint)]">{s.pendingCount}○</span>
+											{/if}
+										</div>
+									</button>
+									<button
+										type="button"
+										onclick={() => removeSnapshot(s.id)}
+										disabled={deleting === s.id}
+										class="shrink-0 rounded-md p-1.5 text-[var(--color-faint)] hover:text-[var(--color-danger)] disabled:opacity-40"
+										aria-label="Delete history entry"
+										title="Delete entry"
+									>
+										<Trash2 size={13} strokeWidth={1.5} />
+									</button>
+								</div>
 								{#if expanded === s.id && s.items.length}
 									<div class="border-t border-[var(--color-hairline)] px-3.5 py-2.5">
 										<ul class="space-y-1">

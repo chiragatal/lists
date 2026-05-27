@@ -378,6 +378,18 @@ export async function resetChecklist(
 	return { snapshot, checklist: after!.checklist, items: after!.items };
 }
 
+export async function deleteSnapshot(
+	db: D1Database,
+	userId: string,
+	snapshotId: number
+): Promise<boolean> {
+	const r = await db
+		.prepare('DELETE FROM checklist_snapshots WHERE user_id = ? AND id = ?')
+		.bind(userId, snapshotId)
+		.run();
+	return (r.meta.changes ?? 0) > 0;
+}
+
 export async function listSnapshots(
 	db: D1Database,
 	userId: string,

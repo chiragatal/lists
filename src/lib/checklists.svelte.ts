@@ -208,6 +208,10 @@ class ChecklistsStore {
 		const data = await api<{ snapshots: Snapshot[] }>(`/api/checklists/${checklistId}/history`);
 		return data.snapshots;
 	}
+
+	async deleteSnapshot(checklistId: number, snapshotId: number) {
+		await api(`/api/checklists/${checklistId}/history/${snapshotId}`, { method: 'DELETE' });
+	}
 }
 
 export const checklists = new ChecklistsStore();
