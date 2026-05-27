@@ -48,10 +48,16 @@ export function rowToItem(row: Row): ApiItem {
 	};
 }
 
-export async function listItems(db: D1Database, userId: string): Promise<ApiItem[]> {
+export async function listItems(
+	db: D1Database,
+	userId: string,
+	planId: number
+): Promise<ApiItem[]> {
 	const result = await db
-		.prepare(`SELECT ${COLS} FROM items WHERE user_id = ? ORDER BY sort_order ASC, id ASC`)
-		.bind(userId)
+		.prepare(
+			`SELECT ${COLS} FROM items WHERE user_id = ? AND plan_id = ? ORDER BY sort_order ASC, id ASC`
+		)
+		.bind(userId, planId)
 		.all<Row>();
 	return (result.results ?? []).map(rowToItem);
 }
@@ -64,10 +70,10 @@ export async function getItem(db: D1Database, userId: string, id: number): Promi
 	return row ? rowToItem(row) : null;
 }
 
-async function nextSortOrder(db: D1Database, userId: string): Promise<number> {
+async function nextSortOrder(db: D1Database, userId: string, planId: number): Promise<number> {
 	const r = await db
-		.prepare('SELECT MAX(sort_order) AS max FROM items WHERE user_id = ?')
-		.bind(userId)
+		.prepare('SELECT MAX(sort_order) AS max FROM items WHERE user_id = ? AND plan_id = ?')
+		.bind(userId, planId)
 		.first<{ max: number | null }>();
 	return (r?.max ?? 0) + 1000;
 }
@@ -87,21 +93,23 @@ export type CreateInput = {
 export async function createItem(
 	db: D1Database,
 	userId: string,
+	planId: number,
 	input: CreateInput
 ): Promise<ApiItem> {
 	const now = Date.now();
-	const sortOrder = input.sortOrder ?? (await nextSortOrder(db, userId));
+	const sortOrder = input.sortOrder ?? (await nextSortOrder(db, userId, planId));
 	const tier = input.tier ?? 'library';
 	const inShortlist = tier === 'shortlist' ? 1 : 0;
 	const inActive = tier === 'active' ? 1 : 0;
 	const row = await db
 		.prepare(
-			`INSERT INTO items (user_id, name, category, tags, notes, completed_at, in_shortlist, in_active, sort_order, created_at, updated_at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			`INSERT INTO items (user_id, plan_id, name, category, tags, notes, completed_at, in_shortlist, in_active, sort_order, created_at, updated_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			 RETURNING ${COLS}`
 		)
 		.bind(
 			userId,
+			planId,
 			input.name.trim(),
 			input.category.trim(),
 			JSON.stringify(input.tags ?? []),
@@ -210,12 +218,16 @@ export async function setTier(
 	return updateItem(db, userId, id, patch);
 }
 
-export async function clearActive(db: D1Database, userId: string): Promise<number> {
+export async function clearActive(
+	db: D1Database,
+	userId: string,
+	planId: number
+): Promise<number> {
 	const r = await db
 		.prepare(
-			'UPDATE items SET in_active = 0, in_shortlist = 0, updated_at = ? WHERE user_id = ? AND in_active = 1'
+			'UPDATE items SET in_active = 0, in_shortlist = 0, updated_at = ? WHERE user_id = ? AND plan_id = ? AND in_active = 1'
 		)
-		.bind(Date.now(), userId)
+		.bind(Date.now(), userId, planId)
 		.run();
 	return r.meta.changes ?? 0;
 }
@@ -246,6 +258,7 @@ export async function removeCompletion(
 export async function renameCategory(
 	db: D1Database,
 	userId: string,
+	planId: number,
 	from: string,
 	to: string
 ): Promise<number> {
@@ -253,9 +266,9 @@ export async function renameCategory(
 	if (!trimmed || trimmed === from) return 0;
 	const r = await db
 		.prepare(
-			'UPDATE items SET category = ?, updated_at = ? WHERE user_id = ? AND category = ?'
+			'UPDATE items SET category = ?, updated_at = ? WHERE user_id = ? AND plan_id = ? AND category = ?'
 		)
-		.bind(trimmed, Date.now(), userId, from)
+		.bind(trimmed, Date.now(), userId, planId, from)
 		.run();
 	return r.meta.changes ?? 0;
 }
@@ -263,6 +276,7 @@ export async function renameCategory(
 export async function renameTag(
 	db: D1Database,
 	userId: string,
+	planId: number,
 	from: string,
 	to: string
 ): Promise<number> {
@@ -270,8 +284,8 @@ export async function renameTag(
 	if (!trimmed || trimmed === from) return 0;
 	// SQLite JSON path: we update each row that has the tag.
 	const rows = await db
-		.prepare(`SELECT ${COLS} FROM items WHERE user_id = ?`)
-		.bind(userId)
+		.prepare(`SELECT ${COLS} FROM items WHERE user_id = ? AND plan_id = ?`)
+		.bind(userId, planId)
 		.all<Row>();
 	const affected: { id: number; tags: string[] }[] = [];
 	for (const r of rows.results ?? []) {
@@ -299,24 +313,22 @@ export async function eraseAllItems(db: D1Database, userId: string): Promise<num
 export async function bulkImport(
 	db: D1Database,
 	userId: string,
-	items: CreateInput[],
-	mode: 'replace' | 'merge'
+	planId: number,
+	items: CreateInput[]
 ): Promise<number> {
-	if (mode === 'replace') {
-		await eraseAllItems(db, userId);
-	}
-	// Allocate sort order range above existing max so merges don't collide.
-	let base = await nextSortOrder(db, userId);
+	if (items.length === 0) return 0;
+	const base = await nextSortOrder(db, userId, planId);
 	const now = Date.now();
 	const statements = items.map((it, idx) => {
 		const tier = it.tier ?? 'library';
 		return db
 			.prepare(
-				`INSERT INTO items (user_id, name, category, tags, notes, completed_at, in_shortlist, in_active, sort_order, created_at, updated_at)
-				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+				`INSERT INTO items (user_id, plan_id, name, category, tags, notes, completed_at, in_shortlist, in_active, sort_order, created_at, updated_at)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 			)
 			.bind(
 				userId,
+				planId,
 				(it.name || 'Untitled').trim(),
 				(it.category || '').trim(),
 				JSON.stringify(it.tags ?? []),
@@ -329,7 +341,6 @@ export async function bulkImport(
 				it.updatedAt ?? now
 			);
 	});
-	if (statements.length === 0) return 0;
 	await db.batch(statements);
 	return statements.length;
 }

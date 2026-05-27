@@ -1,9 +1,0 @@
-<script lang="ts">
-	import TierView from '$lib/TierView.svelte';
-</script>
-
-<svelte:head>
-	<title>Shortlist · Lists</title>
-</svelte:head>
-
-<TierView tier="shortlist" />

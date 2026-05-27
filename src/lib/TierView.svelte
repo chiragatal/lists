@@ -4,10 +4,19 @@
 	import { fade } from 'svelte/transition';
 	import type { Item, Tier } from './db';
 	import { itemsByTier, lists, reorderItems } from './store.svelte';
-	import { backup } from './backup.svelte';
 	import { tierMeta, tierColorClass } from './tier';
-	import { Plus, Search, X, LayoutList, Tag, Dices, History, Menu, Bookmark, Library } from './icons';
-	import { ui } from './ui.svelte';
+	import {
+		Plus,
+		Search,
+		X,
+		LayoutList,
+		Tag,
+		Dices,
+		History,
+		ChevronLeft,
+		Bookmark,
+		Library
+	} from './icons';
 	import ItemEditor from './ItemEditor.svelte';
 	import ItemCard from './ItemCard.svelte';
 	import CategoryChips from './CategoryChips.svelte';
@@ -17,19 +26,19 @@
 
 	type TagMatchMode = 'all' | 'any';
 
-	type Props = { tier: Tier };
-	let { tier }: Props = $props();
+	type Props = { tier: Tier; planId: number };
+	let { tier, planId }: Props = $props();
 
 	const meta = $derived(tierMeta(tier));
 	const tierClass = $derived(tierColorClass(tier));
 
 	$effect(() => {
-		lists.ensureLoaded();
+		lists.ensurePlan(planId);
 	});
 
 	const items = $derived(itemsByTier(tier));
 	const totalCount = $derived(lists.items.length);
-	const isLoading = $derived(!lists.isLoaded);
+	const isLoading = $derived(!lists.isLoaded || lists.currentPlanId !== planId);
 
 	let query = $state('');
 	let categoryFilter = $state('');
@@ -218,24 +227,11 @@
 			<!-- Top utility bar -->
 			<div class="mb-4 flex items-center justify-between gap-3">
 				<div class="flex min-w-0 items-center gap-2.5">
-					<button
-						type="button"
-						onclick={() => ui.openMenu()}
-						class="icon-btn relative shrink-0"
-						aria-label="Menu"
-						title={!isLoading && backup.stale && totalCount > 0
-							? 'Menu — backup overdue'
-							: 'Menu'}
-					>
-						<Menu size={16} strokeWidth={1.5} />
-						{#if !isLoading && backup.stale && totalCount > 0}
-							<span class="backup-dot" aria-hidden="true"></span>
-						{/if}
-					</button>
-					<span
-						class="truncate font-mono text-[10px] tracking-[0.24em] text-[var(--tier-color)] uppercase"
-					>
-						Plans
+					<a href="/" class="icon-btn shrink-0" aria-label="Back to plans">
+						<ChevronLeft size={18} strokeWidth={1.5} />
+					</a>
+					<span class="truncate text-sm font-medium text-[var(--color-text-bright)]">
+						{lists.currentPlanName || 'Plan'}
 					</span>
 				</div>
 				<div class="flex shrink-0 items-center gap-1.5">

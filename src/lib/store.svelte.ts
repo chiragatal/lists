@@ -35,30 +35,36 @@ async function api<T = unknown>(
 class ListsStore {
 	items = $state<Item[]>([]);
 	user = $state<UserSummary | null>(null);
-	isLoaded = $state(false);
+	currentPlanId = $state<number | null>(null);
+	currentPlanName = $state<string>('');
+	isLoaded = $state(false); // loaded for currentPlanId
 	isLoading = $state(false);
 	error = $state<string | null>(null);
 
-	private loadPromise: Promise<void> | null = null;
-
-	async ensureLoaded() {
-		if (this.isLoaded) return;
-		if (this.loadPromise) return this.loadPromise;
-		this.loadPromise = this.load();
+	async loadUser() {
+		if (this.user) return;
 		try {
-			await this.loadPromise;
-		} finally {
-			this.loadPromise = null;
+			this.user = await api<UserSummary>('/api/me');
+		} catch {
+			/* ignore — drawer just won't show account until next try */
 		}
 	}
 
-	async load() {
+	async ensurePlan(planId: number) {
+		if (this.isLoaded && this.currentPlanId === planId) return;
+		await this.loadPlan(planId);
+	}
+
+	async loadPlan(planId: number) {
 		this.isLoading = true;
 		this.error = null;
 		try {
-			const data = await api<{ items: Item[]; user: UserSummary }>('/api/items');
+			const data = await api<{ items: Item[]; plan: { id: number; name: string } }>(
+				`/api/items?plan=${planId}`
+			);
 			this.items = data.items;
-			this.user = data.user;
+			this.currentPlanId = planId;
+			this.currentPlanName = data.plan?.name ?? '';
 			this.isLoaded = true;
 		} catch (e) {
 			this.error = (e as Error).message;
@@ -67,12 +73,8 @@ class ListsStore {
 		}
 	}
 
-	private replace(updated: Item) {
-		this.items = this.items.map((it) => (it.id === updated.id ? updated : it));
-	}
-
-	private remove(id: number) {
-		this.items = this.items.filter((it) => it.id !== id);
+	async reload() {
+		if (this.currentPlanId != null) await this.loadPlan(this.currentPlanId);
 	}
 }
 
@@ -119,7 +121,11 @@ export async function addItem(input: {
 	notes?: string;
 	tier: Tier;
 }): Promise<number> {
-	const item = await api<Item>('/api/items', { method: 'POST', json: input });
+	if (lists.currentPlanId == null) throw new Error('No plan selected');
+	const item = await api<Item>('/api/items', {
+		method: 'POST',
+		json: { ...input, planId: lists.currentPlanId }
+	});
 	// Defensive: never let the same id appear twice in local state.
 	const existsAt = lists.items.findIndex((it) => it.id === item.id);
 	if (existsAt >= 0) {
@@ -150,7 +156,11 @@ export async function deleteItem(id: number) {
 }
 
 export async function clearActive() {
-	await api('/api/items/clear-active', { method: 'POST' });
+	if (lists.currentPlanId == null) return;
+	await api('/api/items/clear-active', {
+		method: 'POST',
+		json: { planId: lists.currentPlanId }
+	});
 	// Reflect locally: any active item becomes library (we also cleared shortlist on the server)
 	lists.items = lists.items.map((it) =>
 		it.inActive === 1 ? { ...it, inActive: 0, inShortlist: 0 } : it
@@ -174,20 +184,22 @@ export async function removeCompletion(id: number, ts: number) {
 }
 
 export async function renameCategory(from: string, to: string) {
+	if (lists.currentPlanId == null) return 0;
 	const { updated } = await api<{ updated: number }>('/api/items/rename-category', {
 		method: 'POST',
-		json: { from, to }
+		json: { planId: lists.currentPlanId, from, to }
 	});
-	await lists.load();
+	await lists.reload();
 	return updated;
 }
 
 export async function renameTag(from: string, to: string) {
+	if (lists.currentPlanId == null) return 0;
 	const { updated } = await api<{ updated: number }>('/api/items/rename-tag', {
 		method: 'POST',
-		json: { from, to }
+		json: { planId: lists.currentPlanId, from, to }
 	});
-	await lists.load();
+	await lists.reload();
 	return updated;
 }
 
@@ -199,17 +211,20 @@ export async function exportAll(): Promise<string> {
 
 export async function importAll(jsonText: string, mode: 'replace' | 'merge' = 'merge') {
 	const parsed = JSON.parse(jsonText);
-	const hasItems = Array.isArray(parsed?.items) || Array.isArray(parsed);
-	const hasChecklists = Array.isArray(parsed?.checklists);
-	if (!hasItems && !hasChecklists) {
-		throw new Error('Invalid backup file: no items or checklists found.');
+	const hasData =
+		Array.isArray(parsed?.plans) ||
+		Array.isArray(parsed?.items) ||
+		Array.isArray(parsed) ||
+		Array.isArray(parsed?.checklists);
+	if (!hasData) {
+		throw new Error('Invalid backup file: no plans, items, or checklists found.');
 	}
-	const { items, checklists } = await api<{ items: number; checklists: number }>('/api/import', {
+	const result = await api<{ plans: number; items: number; checklists: number }>('/api/import', {
 		method: 'POST',
 		json: { data: parsed, mode }
 	});
-	await lists.load();
-	return items + checklists;
+	// Caller reloads the page after import, so no local refresh needed here.
+	return (result.plans ?? 0) + (result.items ?? 0) + result.checklists;
 }
 
 export async function eraseAll() {

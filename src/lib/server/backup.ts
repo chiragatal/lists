@@ -1,5 +1,6 @@
 import type { D1Database } from '@cloudflare/workers-types';
 import { listItems, bulkImport, type CreateInput } from './items';
+import { listPlans, createPlan } from './plans';
 import { getChecklist, listChecklists, listSnapshots } from './checklists';
 
 type AnyRecord = Record<string, unknown>;
@@ -8,8 +9,44 @@ function num(v: unknown): number | undefined {
 	return typeof v === 'number' ? v : undefined;
 }
 
+function itemExportShape(it: {
+	name: string;
+	category: string;
+	tags: string[];
+	notes?: string;
+	completedAt?: number[];
+	inShortlist: 0 | 1;
+	inActive: 0 | 1;
+	sortOrder: number;
+	createdAt: number;
+	updatedAt: number;
+}) {
+	return {
+		name: it.name,
+		category: it.category,
+		tags: it.tags,
+		notes: it.notes,
+		completedAt: it.completedAt,
+		inShortlist: it.inShortlist,
+		inActive: it.inActive,
+		sortOrder: it.sortOrder,
+		createdAt: it.createdAt,
+		updatedAt: it.updatedAt
+	};
+}
+
 export async function buildExport(db: D1Database, userId: string) {
-	const planItems = await listItems(db, userId);
+	const planList = await listPlans(db, userId);
+	const plans = [];
+	for (const p of planList) {
+		const items = await listItems(db, userId, p.id);
+		plans.push({
+			name: p.name,
+			createdAt: p.createdAt,
+			items: items.map(itemExportShape)
+		});
+	}
+
 	const cls = await listChecklists(db, userId);
 	const checklists = [];
 	for (const c of cls) {
@@ -37,23 +74,7 @@ export async function buildExport(db: D1Database, userId: string) {
 		});
 	}
 
-	return {
-		schema: 'lists.v3',
-		exportedAt: new Date().toISOString(),
-		items: planItems.map((it) => ({
-			name: it.name,
-			category: it.category,
-			tags: it.tags,
-			notes: it.notes,
-			completedAt: it.completedAt,
-			inShortlist: it.inShortlist,
-			inActive: it.inActive,
-			sortOrder: it.sortOrder,
-			createdAt: it.createdAt,
-			updatedAt: it.updatedAt
-		})),
-		checklists
-	};
+	return { schema: 'lists.v4', exportedAt: new Date().toISOString(), plans, checklists };
 }
 
 function planItemToInput(raw: AnyRecord): CreateInput {
@@ -85,28 +106,48 @@ export async function applyImport(
 	userId: string,
 	data: AnyRecord | unknown[],
 	mode: 'replace' | 'merge'
-): Promise<{ items: number; checklists: number }> {
+): Promise<{ plans: number; items: number; checklists: number }> {
 	const root = (Array.isArray(data) ? { items: data } : (data ?? {})) as AnyRecord;
-	const planItemsRaw = Array.isArray(root.items) ? (root.items as AnyRecord[]) : [];
+
+	// Normalize to a list of plans. New (v4) backups have `plans`; older ones
+	// (v2/v3) have a flat `items` array → import into a single "Plan".
+	let planBlocks: { name: string; createdAt?: number; items: AnyRecord[] }[];
+	if (Array.isArray(root.plans)) {
+		planBlocks = (root.plans as AnyRecord[]).map((p) => ({
+			name: String(p.name ?? '').trim() || 'Plan',
+			createdAt: num(p.createdAt),
+			items: Array.isArray(p.items) ? (p.items as AnyRecord[]) : []
+		}));
+	} else if (Array.isArray(root.items)) {
+		planBlocks = [{ name: 'Plan', items: root.items as AnyRecord[] }];
+	} else {
+		planBlocks = [];
+	}
+
 	const checklistsRaw = Array.isArray(root.checklists) ? (root.checklists as AnyRecord[]) : [];
 
-	// On replace, wipe checklists (cascades items + snapshots). bulkImport
-	// handles wiping plan items itself when mode === 'replace'.
 	if (mode === 'replace') {
+		await db.prepare('DELETE FROM items WHERE user_id = ?').bind(userId).run();
+		await db.prepare('DELETE FROM plans WHERE owner_id = ?').bind(userId).run();
 		await db.prepare('DELETE FROM checklists WHERE user_id = ?').bind(userId).run();
 	}
 
-	const importedItems = await bulkImport(db, userId, planItemsRaw.map(planItemToInput), mode);
+	let importedPlans = 0;
+	let importedItems = 0;
+	for (const block of planBlocks) {
+		const plan = await createPlan(db, userId, block.name);
+		importedItems += await bulkImport(db, userId, plan.id, block.items.map(planItemToInput));
+		importedPlans++;
+	}
 
-	// Determine starting sort_order for new checklists.
+	// Checklists
+	const now = Date.now();
+	let importedChecklists = 0;
 	const maxRow = await db
 		.prepare('SELECT MAX(sort_order) AS max FROM checklists WHERE user_id = ?')
 		.bind(userId)
 		.first<{ max: number | null }>();
 	let base = (maxRow?.max ?? 0) + 1000;
-
-	let importedChecklists = 0;
-	const now = Date.now();
 	for (const c of checklistsRaw) {
 		const clRow = await db
 			.prepare(
@@ -172,5 +213,5 @@ export async function applyImport(
 		importedChecklists++;
 	}
 
-	return { items: importedItems, checklists: importedChecklists };
+	return { plans: importedPlans, items: importedItems, checklists: importedChecklists };
 }

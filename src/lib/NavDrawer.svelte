@@ -5,9 +5,7 @@
 	import { Crosshair, ListChecks, Settings, X } from './icons';
 
 	const onPlans = $derived(
-		page.url.pathname === '/' ||
-			page.url.pathname.startsWith('/shortlist') ||
-			page.url.pathname.startsWith('/library')
+		page.url.pathname === '/' || page.url.pathname.startsWith('/plans')
 	);
 	const onChecklists = $derived(page.url.pathname.startsWith('/checklists'));
 	function go(_href: string) {

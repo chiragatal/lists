@@ -14,33 +14,40 @@
 		requestPersistentStorage();
 	});
 
-	const tabs = [
-		{
-			href: '/',
-			label: 'Active',
-			match: (p: string) => p === '/',
-			Icon: Crosshair,
-			tone: 'emerald'
-		},
-		{
-			href: '/shortlist',
-			label: 'Shortlist',
-			match: (p: string) => p.startsWith('/shortlist'),
-			Icon: Bookmark,
-			tone: 'amber'
-		},
-		{
-			href: '/library',
-			label: 'Library',
-			match: (p: string) => p.startsWith('/library'),
-			Icon: Library,
-			tone: 'slate'
-		}
-	];
+	// The bottom nav shows only inside a plan, scoped to that plan's tiers.
+	const planMatch = $derived(page.url.pathname.match(/^\/plans\/(\d+)(\/(shortlist|library))?\/?$/));
+	const planId = $derived(planMatch ? planMatch[1] : null);
+	const subTier = $derived(planMatch ? (planMatch[3] ?? 'active') : null);
 
-	const hideNav = $derived(
-		page.url.pathname.startsWith('/login') || page.url.pathname.startsWith('/checklists')
+	const tabs = $derived(
+		planId
+			? [
+					{
+						href: `/plans/${planId}`,
+						label: 'Active',
+						active: subTier === 'active',
+						Icon: Crosshair,
+						tone: 'emerald'
+					},
+					{
+						href: `/plans/${planId}/shortlist`,
+						label: 'Shortlist',
+						active: subTier === 'shortlist',
+						Icon: Bookmark,
+						tone: 'amber'
+					},
+					{
+						href: `/plans/${planId}/library`,
+						label: 'Library',
+						active: subTier === 'library',
+						Icon: Library,
+						tone: 'slate'
+					}
+				]
+			: []
 	);
+
+	const hideNav = $derived(!planId);
 </script>
 
 <div class="flex min-h-dvh flex-col">
@@ -56,7 +63,7 @@
 		<div class="nav-blur"></div>
 		<ul class="nav-list mx-auto flex max-w-xl">
 			{#each tabs as tab}
-				{@const active = tab.match(page.url.pathname)}
+				{@const active = tab.active}
 				<li class="flex-1">
 					<a
 						href={tab.href}
