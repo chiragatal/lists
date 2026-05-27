@@ -10,7 +10,7 @@
 	import { dndzone, type DndEvent } from 'svelte-dnd-action';
 	import { flip } from 'svelte/animate';
 	import {
-		ChevronLeft,
+		Menu,
 		Plus,
 		MoreHorizontal,
 		History,
@@ -21,6 +21,7 @@
 		GripVertical,
 		LayoutList
 	} from '$lib/icons';
+	import { ui } from '$lib/ui.svelte';
 	import ChecklistHistorySheet from '$lib/ChecklistHistorySheet.svelte';
 
 	const id = $derived(Number(page.params.id));
@@ -252,9 +253,14 @@
 		<header class="mb-5">
 			<div class="mb-4 flex items-center justify-between gap-3">
 				<div class="flex min-w-0 items-center gap-2.5">
-					<a href="/checklists" class="icon-btn shrink-0" aria-label="Back to checklists">
-						<ChevronLeft size={18} strokeWidth={1.5} />
-					</a>
+					<button
+						type="button"
+						onclick={() => ui.openMenu()}
+						class="icon-btn shrink-0"
+						aria-label="Menu"
+					>
+						<Menu size={16} strokeWidth={1.5} />
+					</button>
 					<span
 						class="truncate font-mono text-[10px] tracking-[0.24em] text-[var(--tier-color)] uppercase"
 					>

@@ -15,7 +15,7 @@
 		Tag,
 		Dices,
 		History,
-		ChevronLeft,
+		Menu,
 		Bookmark,
 		Library,
 		MoreHorizontal,
@@ -23,6 +23,7 @@
 		Trash2,
 		Check
 	} from './icons';
+	import { ui } from './ui.svelte';
 	import ItemEditor from './ItemEditor.svelte';
 	import ItemCard from './ItemCard.svelte';
 	import CategoryChips from './CategoryChips.svelte';
@@ -260,9 +261,14 @@
 			<!-- Top utility bar -->
 			<div class="mb-4 flex items-center justify-between gap-3">
 				<div class="flex min-w-0 items-center gap-2.5">
-					<a href="/" class="icon-btn shrink-0" aria-label="Back to plans">
-						<ChevronLeft size={18} strokeWidth={1.5} />
-					</a>
+					<button
+						type="button"
+						onclick={() => ui.openMenu()}
+						class="icon-btn shrink-0"
+						aria-label="Menu"
+					>
+						<Menu size={16} strokeWidth={1.5} />
+					</button>
 					{#if renaming}
 						<input
 							type="text"

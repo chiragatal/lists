@@ -67,12 +67,10 @@
 								class:active={currentPlanId === String(p.id)}
 							>
 								<span class="flex-1 truncate">{p.name}</span>
-								<span
-									class="font-mono text-[10px] tabular-nums"
-									class:text-[var(--color-emerald)]={p.counts.active > 0}
-									class:text-[var(--color-faint)]={p.counts.active === 0}
-								>
-									{p.counts.active}
+								<span class="flex shrink-0 items-center gap-1.5 font-mono text-[10px] tabular-nums">
+									<span class="text-[var(--color-emerald)]" title="Active">{p.counts.active}</span>
+									<span class="text-[var(--color-amber)]" title="Shortlist">{p.counts.shortlist}</span>
+									<span class="text-[var(--color-faint)]" title="In library">{p.counts.library}</span>
 								</span>
 							</a>
 						</li>
@@ -98,8 +96,10 @@
 								class:active={currentChecklistId === String(c.id)}
 							>
 								<span class="flex-1 truncate">{c.name}</span>
-								<span class="font-mono text-[10px] tabular-nums text-[var(--color-faint)]">
-									{c.counts.done + c.counts.skipped}/{c.counts.total}
+								<span class="flex shrink-0 items-center gap-1.5 font-mono text-[10px] tabular-nums">
+									<span class="text-[var(--color-emerald)]" title="Done">{c.counts.done}</span>
+									<span class="text-[var(--color-slate)]" title="Skipped">{c.counts.skipped}</span>
+									<span class="text-[var(--color-faint)]" title="Pending">{c.counts.pending}</span>
 								</span>
 							</a>
 						</li>
