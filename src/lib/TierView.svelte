@@ -6,27 +6,16 @@
 	import { itemsByTier, lists, reorderItems } from './store.svelte';
 	import { backup } from './backup.svelte';
 	import { tierMeta, tierColorClass } from './tier';
-	import {
-		Plus,
-		Search,
-		Settings,
-		X,
-		LayoutList,
-		Tag,
-		Bookmark,
-		Library,
-		Dices,
-		History
-	} from './icons';
+	import { Plus, Search, X, LayoutList, Tag, Dices, History, Menu, Bookmark, Library } from './icons';
+	import { ui } from './ui.svelte';
 	import ItemEditor from './ItemEditor.svelte';
 	import ItemCard from './ItemCard.svelte';
 	import CategoryChips from './CategoryChips.svelte';
 	import TagFilter from './TagFilter.svelte';
-
-	type TagMatchMode = 'all' | 'any';
-	import SettingsSheet from './SettingsSheet.svelte';
 	import PickModal from './PickModal.svelte';
 	import HistorySheet from './HistorySheet.svelte';
+
+	type TagMatchMode = 'all' | 'any';
 
 	type Props = { tier: Tier };
 	let { tier }: Props = $props();
@@ -50,7 +39,6 @@
 	let editorOpen = $state(false);
 	let editing = $state<Item | null>(null);
 	let tagFilterOpen = $state(false);
-	let settingsOpen = $state(false);
 	let pickOpen = $state(false);
 	let historyOpen = $state(false);
 	let searchFocused = $state(false);
@@ -227,31 +215,24 @@
 	<div class="mx-auto max-w-xl px-5 pt-7 pb-24">
 		<!-- Tier title -->
 		<header class="mb-5">
-			<div class="flex items-start justify-between gap-4">
-				<div class="min-w-0">
-					<p
-						class="mb-1.5 font-mono text-[10px] tracking-[0.24em] text-[var(--tier-color)] uppercase"
-					>
-						<span class="inline-block size-1.5 rounded-full bg-[var(--tier-color)] align-middle"
-						></span>
-						<span class="ml-1.5">Tier · {meta.id}</span>
-					</p>
-					<h1
-						class="font-display text-5xl leading-[0.95] text-[var(--color-text-bright)]"
-					>
-						{meta.label}
-					</h1>
-					<p class="mt-2 max-w-xs text-[13px] leading-snug text-[var(--color-muted)]">
-						{meta.subtitle}
-					</p>
-				</div>
-				<div class="flex shrink-0 items-center gap-1.5">
-					<button
-						type="button"
-						onclick={openNew}
-						class="add-btn"
-						aria-label="Add new item"
-					>
+			<!-- Top utility bar -->
+			<div class="mb-5 flex items-center justify-between">
+				<button
+					type="button"
+					onclick={() => ui.openMenu()}
+					class="icon-btn relative"
+					aria-label="Menu"
+					title={!isLoading && backup.stale && totalCount > 0
+						? 'Menu — backup overdue'
+						: 'Menu'}
+				>
+					<Menu size={16} strokeWidth={1.5} />
+					{#if !isLoading && backup.stale && totalCount > 0}
+						<span class="backup-dot" aria-hidden="true"></span>
+					{/if}
+				</button>
+				<div class="flex items-center gap-1.5">
+					<button type="button" onclick={openNew} class="add-btn" aria-label="Add new item">
 						<Plus size={15} strokeWidth={2} />
 						<span class="add-label">Add</span>
 					</button>
@@ -264,21 +245,23 @@
 					>
 						<History size={15} strokeWidth={1.5} />
 					</button>
-					<button
-						type="button"
-						onclick={() => (settingsOpen = true)}
-						class="icon-btn relative"
-						aria-label="Settings"
-						title={!isLoading && backup.stale && totalCount > 0
-							? 'Settings — backup overdue'
-							: 'Settings'}
-					>
-						<Settings size={15} strokeWidth={1.5} />
-						{#if !isLoading && backup.stale && totalCount > 0}
-							<span class="backup-dot" aria-hidden="true"></span>
-						{/if}
-					</button>
 				</div>
+			</div>
+
+			<div class="min-w-0">
+				<p
+					class="mb-1.5 font-mono text-[10px] tracking-[0.24em] text-[var(--tier-color)] uppercase"
+				>
+					<span class="inline-block size-1.5 rounded-full bg-[var(--tier-color)] align-middle"
+					></span>
+					<span class="ml-1.5">Tier · {meta.id}</span>
+				</p>
+				<h1 class="font-display text-5xl leading-[0.95] text-[var(--color-text-bright)]">
+					{meta.label}
+				</h1>
+				<p class="mt-2 max-w-xs text-[13px] leading-snug text-[var(--color-muted)]">
+					{meta.subtitle}
+				</p>
 			</div>
 
 			<!-- Counts ruler -->
@@ -621,8 +604,6 @@
 		openEdit(it);
 	}}
 />
-
-<SettingsSheet open={settingsOpen} onClose={() => (settingsOpen = false)} />
 
 <HistorySheet
 	open={historyOpen}

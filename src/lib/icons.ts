@@ -10,6 +10,7 @@ export {
 	History,
 	LayoutList,
 	Library,
+	ListChecks,
 	ListFilter,
 	Menu,
 	MoreHorizontal,

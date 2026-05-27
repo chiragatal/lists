@@ -6,7 +6,6 @@
 		eraseAll,
 		renameCategory,
 		renameTag,
-		signOut,
 		lists
 	} from './store.svelte';
 	import { backup } from './backup.svelte';
@@ -93,14 +92,6 @@
 		}
 	}
 
-	async function handleSignOut() {
-		busy = true;
-		try {
-			await signOut();
-		} finally {
-			busy = false;
-		}
-	}
 
 	function beginEdit(kind: 'category' | 'tag', name: string) {
 		editing = { kind, name, draft: name };
@@ -187,48 +178,6 @@
 			</header>
 
 			<div class="max-h-[78vh] space-y-5 overflow-y-auto p-5 scrollbar-thin">
-				{#if lists.user}
-					<section>
-						<h3
-							class="mb-2 font-mono text-[10px] tracking-[0.18em] text-[var(--color-faint)] uppercase"
-						>
-							Account
-						</h3>
-						<div class="flex items-center gap-3 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-paper-2)] px-3.5 py-3">
-							{#if lists.user.picture}
-								<img
-									src={lists.user.picture}
-									alt=""
-									class="h-8 w-8 rounded-full border border-[var(--color-hairline)]"
-									referrerpolicy="no-referrer"
-								/>
-							{:else}
-								<div
-									class="grid h-8 w-8 place-items-center rounded-full border border-[var(--color-hairline)] bg-[var(--color-paper)] font-mono text-[11px] text-[var(--color-muted)] uppercase"
-								>
-									{lists.user.email.slice(0, 1)}
-								</div>
-							{/if}
-							<div class="min-w-0 flex-1">
-								{#if lists.user.name}
-									<p class="truncate text-sm font-medium text-[var(--color-text-bright)]">
-										{lists.user.name}
-									</p>
-								{/if}
-								<p class="truncate text-xs text-[var(--color-muted)]">{lists.user.email}</p>
-							</div>
-							<button
-								type="button"
-								onclick={handleSignOut}
-								disabled={busy}
-								class="font-mono text-[10px] tracking-[0.18em] text-[var(--color-muted)] uppercase hover:text-[var(--color-text)] disabled:opacity-50"
-							>
-								Sign out
-							</button>
-						</div>
-					</section>
-				{/if}
-
 				<section>
 					<div class="mb-2 flex items-baseline justify-between">
 						<h3

@@ -4,6 +4,9 @@
 	import { page } from '$app/state';
 	import { Bookmark, Crosshair, Library } from '$lib/icons';
 	import { requestPersistentStorage } from '$lib/backup.svelte';
+	import { ui } from '$lib/ui.svelte';
+	import NavDrawer from '$lib/NavDrawer.svelte';
+	import SettingsSheet from '$lib/SettingsSheet.svelte';
 
 	let { children } = $props();
 
@@ -70,6 +73,9 @@
 	</nav>
 	{/if}
 </div>
+
+<NavDrawer />
+<SettingsSheet open={ui.settingsOpen} onClose={() => ui.closeSettings()} />
 
 <style>
 	.bottom-nav {
