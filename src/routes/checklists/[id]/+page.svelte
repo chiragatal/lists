@@ -18,7 +18,8 @@
 		Pencil,
 		X,
 		Check,
-		GripVertical
+		GripVertical,
+		LayoutList
 	} from '$lib/icons';
 	import ChecklistHistorySheet from '$lib/ChecklistHistorySheet.svelte';
 
@@ -32,37 +33,75 @@
 	const cl = $derived(checklists.current);
 	const items = $derived(checklists.items);
 
-	// Group by category, then split by status (pending → done → skipped).
-	// Items arrive sorted by sortOrder, so each sublist keeps manual order.
-	const groups = $derived(
+	type SortMode = 'in-place' | 'by-category' | 'by-status';
+	let sortMode = $state<SortMode>('by-category');
+	$effect(() => {
+		if (typeof localStorage === 'undefined') return;
+		const v = localStorage.getItem('checklist:sortMode');
+		if (v === 'in-place' || v === 'by-category' || v === 'by-status') sortMode = v;
+	});
+	function cycleSort() {
+		sortMode =
+			sortMode === 'in-place'
+				? 'by-category'
+				: sortMode === 'by-category'
+					? 'by-status'
+					: 'in-place';
+		if (typeof localStorage !== 'undefined') localStorage.setItem('checklist:sortMode', sortMode);
+	}
+	const sortLabel = $derived(
+		sortMode === 'in-place' ? 'In place' : sortMode === 'by-category' ? 'By category' : 'By status'
+	);
+
+	// Category-primary layout (In place / By category).
+	// In place: every item is draggable in manual order, status = appearance only.
+	// By category: pending items drag; done/skipped sink below, static.
+	const catGroups = $derived(
 		groupItemsByCategory(items).map((g) => ({
 			category: g.category,
-			pending: g.items.filter((i) => i.state === 'pending'),
-			done: g.items.filter((i) => i.state === 'done'),
-			skipped: g.items.filter((i) => i.state === 'skipped')
+			draggable: sortMode === 'in-place' ? g.items : g.items.filter((i) => i.state === 'pending'),
+			done: sortMode === 'in-place' ? [] : g.items.filter((i) => i.state === 'done'),
+			skipped: sortMode === 'in-place' ? [] : g.items.filter((i) => i.state === 'skipped')
 		}))
 	);
 
-	// Mutable mirror of each category's pending items for drag-to-reorder.
-	let pendingDnd = $state<Record<string, ChecklistItem[]>>({});
+	// Status-primary layout (By status): pending → done → skipped sections,
+	// each sub-grouped by category (categories repeat).
+	const statusGroups = $derived.by(() => {
+		if (sortMode !== 'by-status') return [];
+		const order: ChecklistState[] = ['pending', 'done', 'skipped'];
+		return order
+			.map((status) => ({
+				status,
+				categories: groupItemsByCategory(items.filter((i) => i.state === status))
+			}))
+			.filter((s) => s.categories.length > 0);
+	});
+
+	// Mutable mirror of each category's draggable items for drag-to-reorder.
+	let dndItems = $state<Record<string, ChecklistItem[]>>({});
 	$effect(() => {
 		const m: Record<string, ChecklistItem[]> = {};
-		for (const g of groups) m[g.category] = g.pending;
-		pendingDnd = m;
+		for (const g of catGroups) m[g.category] = g.draggable;
+		dndItems = m;
 	});
 
 	function handleConsider(category: string, e: CustomEvent<DndEvent<ChecklistItem>>) {
-		pendingDnd = { ...pendingDnd, [category]: e.detail.items };
+		dndItems = { ...dndItems, [category]: e.detail.items };
 	}
 	async function handleFinalize(category: string, e: CustomEvent<DndEvent<ChecklistItem>>) {
-		pendingDnd = { ...pendingDnd, [category]: e.detail.items };
+		dndItems = { ...dndItems, [category]: e.detail.items };
 		const fullIds: number[] = [];
-		for (const g of groups) {
-			for (const it of pendingDnd[g.category] ?? g.pending) fullIds.push(it.id);
+		for (const g of catGroups) {
+			for (const it of dndItems[g.category] ?? g.draggable) fullIds.push(it.id);
 			for (const it of g.done) fullIds.push(it.id);
 			for (const it of g.skipped) fullIds.push(it.id);
 		}
 		await checklists.reorderItems(id, fullIds);
+	}
+
+	function statusHeading(s: ChecklistState): string {
+		return s === 'pending' ? 'To do' : s === 'done' ? 'Done' : 'Skipped';
 	}
 
 	const counts = $derived(cl?.counts ?? { total: 0, done: 0, skipped: 0, pending: 0 });
@@ -227,6 +266,15 @@
 						<Plus size={15} strokeWidth={2} />
 						<span>Add</span>
 					</button>
+					<button
+						type="button"
+						onclick={cycleSort}
+						class="icon-btn"
+						aria-label="Cycle sort"
+						title={`Sort: ${sortLabel}`}
+					>
+						<LayoutList size={15} strokeWidth={1.5} />
+					</button>
 					<div class="relative">
 						<button
 							type="button"
@@ -375,70 +423,122 @@
 				</button>
 			</div>
 		{:else}
-			<div class="space-y-6">
-				{#each groups as g (g.category)}
-					<section>
-						{#if g.category && g.category !== '—'}
+			<div
+				class="mb-3 flex items-center gap-2 font-mono text-[10px] tracking-[0.18em] text-[var(--color-faint)] uppercase"
+			>
+				<span>Sort · {sortLabel}</span>
+				{#if sortMode !== 'by-status'}
+					<span class="ml-auto normal-case">drag · to reorder</span>
+				{/if}
+			</div>
+
+			{#if sortMode === 'by-status'}
+				<!-- Status-primary: To do / Done / Skipped, categories repeat -->
+				<div class="space-y-7">
+					{#each statusGroups as sg (sg.status)}
+						<section>
 							<div class="mb-2.5 flex items-baseline gap-3">
 								<h2
-									class="font-mono text-[10px] tracking-[0.22em] text-[var(--color-muted)] uppercase"
+									class="font-mono text-[10px] tracking-[0.22em] uppercase"
+									class:text-[var(--color-emerald)]={sg.status === 'done'}
+									class:text-[var(--color-slate)]={sg.status === 'skipped'}
+									class:text-[var(--tier-color)]={sg.status === 'pending'}
 								>
-									{g.category}
+									{statusHeading(sg.status)}
 								</h2>
 								<div class="h-px flex-1 bg-[var(--color-hairline)]"></div>
 							</div>
-						{/if}
+							<div class="space-y-3">
+								{#each sg.categories as cat (cat.category)}
+									<div>
+										{#if cat.category && cat.category !== '—'}
+											<p
+												class="mb-1.5 font-mono text-[9px] tracking-[0.2em] text-[var(--color-faint)] uppercase"
+											>
+												{cat.category}
+											</p>
+										{/if}
+										<ul class="space-y-1.5">
+											{#each cat.items as it (it.id)}
+												<li
+													class="item-row flex items-center gap-2 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-paper)] px-3 py-2.5"
+													data-state={it.state}
+												>
+													{@render row(it, false)}
+												</li>
+											{/each}
+										</ul>
+									</div>
+								{/each}
+							</div>
+						</section>
+					{/each}
+				</div>
+			{:else}
+				<!-- Category-primary: In place / By category -->
+				<div class="space-y-6">
+					{#each catGroups as g (g.category)}
+						<section>
+							{#if g.category && g.category !== '—'}
+								<div class="mb-2.5 flex items-baseline gap-3">
+									<h2
+										class="font-mono text-[10px] tracking-[0.22em] text-[var(--color-muted)] uppercase"
+									>
+										{g.category}
+									</h2>
+									<div class="h-px flex-1 bg-[var(--color-hairline)]"></div>
+								</div>
+							{/if}
 
-						<!-- Pending: draggable to reorder -->
-						{#if (pendingDnd[g.category] ?? g.pending).length}
-							<ul
-								class="space-y-1.5"
-								use:dndzone={{
-									items: pendingDnd[g.category] ?? g.pending,
-									flipDurationMs: 200,
-									type: `cl-${g.category}`,
-									dropTargetStyle: {},
-									dropTargetClasses: ['dnd-drop-target']
-								}}
-								onconsider={(e) => handleConsider(g.category, e)}
-								onfinalize={(e) => handleFinalize(g.category, e)}
-							>
-								{#each pendingDnd[g.category] ?? g.pending as it (it.id)}
-									<li
-										animate:flip={{ duration: 200 }}
-										class="item-row flex items-center gap-2 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-paper)] px-3 py-2.5"
-										data-state={it.state}
-									>
-										{@render row(it, true)}
-									</li>
-								{/each}
-							</ul>
-						{/if}
+							{#if (dndItems[g.category] ?? g.draggable).length}
+								<ul
+									class="space-y-1.5"
+									use:dndzone={{
+										items: dndItems[g.category] ?? g.draggable,
+										flipDurationMs: 200,
+										type: `cl-${g.category}`,
+										dropTargetStyle: {},
+										dropTargetClasses: ['dnd-drop-target']
+									}}
+									onconsider={(e) => handleConsider(g.category, e)}
+									onfinalize={(e) => handleFinalize(g.category, e)}
+								>
+									{#each dndItems[g.category] ?? g.draggable as it (it.id)}
+										<li
+											animate:flip={{ duration: 200 }}
+											class="item-row flex items-center gap-2 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-paper)] px-3 py-2.5"
+											data-state={it.state}
+										>
+											{@render row(it, true)}
+										</li>
+									{/each}
+								</ul>
+							{/if}
 
-						<!-- Resolved: done then skipped, static -->
-						{#if g.done.length || g.skipped.length}
-							<ul class="mt-1.5 space-y-1.5">
-								{#each g.done as it (it.id)}
-									<li
-										class="item-row flex items-center gap-2 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-paper)] px-3 py-2.5"
-										data-state={it.state}
-									>
-										{@render row(it, false)}
-									</li>
-								{/each}
-								{#each g.skipped as it (it.id)}
-									<li
-										class="item-row flex items-center gap-2 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-paper)] px-3 py-2.5"
-										data-state={it.state}
-									>
-										{@render row(it, false)}
-									</li>
-								{/each}
-							</ul>
-						{/if}
-					</section>
-				{/each}
-			</div>
+							{#if g.done.length || g.skipped.length}
+								<ul class="mt-1.5 space-y-1.5">
+									{#each g.done as it (it.id)}
+										<li
+											class="item-row flex items-center gap-2 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-paper)] px-3 py-2.5"
+											data-state={it.state}
+										>
+											{@render row(it, false)}
+										</li>
+									{/each}
+									{#each g.skipped as it (it.id)}
+										<li
+											class="item-row flex items-center gap-2 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-paper)] px-3 py-2.5"
+											data-state={it.state}
+										>
+											{@render row(it, false)}
+										</li>
+									{/each}
+								</ul>
+							{/if}
+						</section>
+					{/each}
+				</div>
+			{/if}
 		{/if}
 	</div>
 </div>
