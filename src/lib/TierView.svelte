@@ -212,26 +212,33 @@
 </script>
 
 <div class="page {tierClass}">
-	<div class="mx-auto max-w-xl px-5 pt-7 pb-24">
+	<div class="mx-auto max-w-xl px-5 pt-5 pb-24">
 		<!-- Tier title -->
 		<header class="mb-5">
 			<!-- Top utility bar -->
-			<div class="mb-5 flex items-center justify-between">
-				<button
-					type="button"
-					onclick={() => ui.openMenu()}
-					class="icon-btn relative"
-					aria-label="Menu"
-					title={!isLoading && backup.stale && totalCount > 0
-						? 'Menu — backup overdue'
-						: 'Menu'}
-				>
-					<Menu size={16} strokeWidth={1.5} />
-					{#if !isLoading && backup.stale && totalCount > 0}
-						<span class="backup-dot" aria-hidden="true"></span>
-					{/if}
-				</button>
-				<div class="flex items-center gap-1.5">
+			<div class="mb-4 flex items-center justify-between gap-3">
+				<div class="flex min-w-0 items-center gap-2.5">
+					<button
+						type="button"
+						onclick={() => ui.openMenu()}
+						class="icon-btn relative shrink-0"
+						aria-label="Menu"
+						title={!isLoading && backup.stale && totalCount > 0
+							? 'Menu — backup overdue'
+							: 'Menu'}
+					>
+						<Menu size={16} strokeWidth={1.5} />
+						{#if !isLoading && backup.stale && totalCount > 0}
+							<span class="backup-dot" aria-hidden="true"></span>
+						{/if}
+					</button>
+					<span
+						class="truncate font-mono text-[10px] tracking-[0.24em] text-[var(--tier-color)] uppercase"
+					>
+						Plans
+					</span>
+				</div>
+				<div class="flex shrink-0 items-center gap-1.5">
 					<button type="button" onclick={openNew} class="add-btn" aria-label="Add new item">
 						<Plus size={15} strokeWidth={2} />
 						<span class="add-label">Add</span>
@@ -249,13 +256,6 @@
 			</div>
 
 			<div class="min-w-0">
-				<p
-					class="mb-1.5 font-mono text-[10px] tracking-[0.24em] text-[var(--tier-color)] uppercase"
-				>
-					<span class="inline-block size-1.5 rounded-full bg-[var(--tier-color)] align-middle"
-					></span>
-					<span class="ml-1.5">Tier · {meta.id}</span>
-				</p>
 				<h1 class="font-display text-5xl leading-[0.95] text-[var(--color-text-bright)]">
 					{meta.label}
 				</h1>
