@@ -34,7 +34,7 @@
 	const items = $derived(checklists.items);
 
 	type SortMode = 'in-place' | 'by-category' | 'by-status';
-	let sortMode = $state<SortMode>('by-category');
+	let sortMode = $state<SortMode>('in-place');
 	$effect(() => {
 		if (typeof localStorage === 'undefined') return;
 		const v = localStorage.getItem('checklist:sortMode');
