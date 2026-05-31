@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Download, Upload, Trash2, X, Pencil, Check } from './icons';
-	import { exportAll, importAll, eraseAll, lists } from './lists.svelte';
+	import { exportAll, importAll, eraseAll, signOut, lists } from './lists.svelte';
 	import { backup } from './backup.svelte';
 
 	type Props = {
@@ -180,6 +180,47 @@
 			</header>
 
 			<div class="max-h-[78vh] space-y-5 overflow-y-auto p-5 scrollbar-thin">
+				{#if lists.user}
+					<section>
+						<h3
+							class="mb-2 font-mono text-[10px] tracking-[0.18em] text-[var(--color-faint)] uppercase"
+						>
+							Account
+						</h3>
+						<div class="flex items-center gap-3 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-paper-2)] px-3.5 py-3">
+							{#if lists.user.picture}
+								<img
+									src={lists.user.picture}
+									alt=""
+									class="h-9 w-9 rounded-full border border-[var(--color-hairline)]"
+									referrerpolicy="no-referrer"
+								/>
+							{:else}
+								<div
+									class="grid h-9 w-9 place-items-center rounded-full border border-[var(--color-hairline)] bg-[var(--color-paper-3)] font-mono text-xs text-[var(--color-muted)] uppercase"
+								>
+									{lists.user.email.slice(0, 1)}
+								</div>
+							{/if}
+							<div class="min-w-0 flex-1">
+								{#if lists.user.name}
+									<p class="truncate text-sm font-medium text-[var(--color-text-bright)]">
+										{lists.user.name}
+									</p>
+								{/if}
+								<p class="truncate text-xs text-[var(--color-muted)]">{lists.user.email}</p>
+							</div>
+							<button
+								type="button"
+								onclick={() => signOut()}
+								class="rounded-md border border-[var(--color-hairline)] px-3 py-1.5 font-mono text-[10px] tracking-[0.16em] text-[var(--color-muted)] uppercase hover:border-[var(--color-hairline-strong)] hover:text-[var(--color-text)]"
+							>
+								Sign out
+							</button>
+						</div>
+					</section>
+				{/if}
+
 				<section>
 					<div class="mb-2 flex items-baseline justify-between">
 						<h3

@@ -9,9 +9,8 @@
 	import { dndzone, type DndEvent } from 'svelte-dnd-action';
 	import { flip } from 'svelte/animate';
 	import {
-		Menu,
 		Plus,
-		MoreHorizontal,
+		Settings,
 		History,
 		Trash2,
 		Pencil,
@@ -21,7 +20,6 @@
 		LayoutList,
 		Users
 	} from '$lib/icons';
-	import { ui } from '$lib/ui.svelte';
 	import ChecklistHistorySheet from '$lib/ChecklistHistorySheet.svelte';
 	import ShareSheet from '$lib/ShareSheet.svelte';
 
@@ -276,19 +274,7 @@
 		<header class="mb-5">
 			<div class="mb-4 flex items-center justify-between gap-3">
 				<div class="flex min-w-0 items-center gap-2.5">
-					<button
-						type="button"
-						onclick={() => ui.openMenu()}
-						class="icon-btn shrink-0"
-						aria-label="Menu"
-					>
-						<Menu size={16} strokeWidth={1.5} />
-					</button>
-					<span
-						class="truncate font-mono text-[10px] tracking-[0.24em] text-[var(--tier-color)] uppercase"
-					>
-						Checklist
-					</span>
+					<a href="/" class="wordmark shrink-0" aria-label="Home">Lists</a>
 					{#if !isOwner}
 						<span
 							class="shrink-0 rounded-full border border-[var(--color-hairline-strong)] px-1.5 py-0.5 font-mono text-[9px] tracking-[0.14em] text-[var(--color-muted)] uppercase"
@@ -318,9 +304,10 @@
 							type="button"
 							onclick={() => (menuOpen = !menuOpen)}
 							class="icon-btn"
-							aria-label="Checklist menu"
+							aria-label="Checklist settings"
+							title="Checklist settings"
 						>
-							<MoreHorizontal size={16} strokeWidth={1.5} />
+							<Settings size={15} strokeWidth={1.5} />
 						</button>
 						{#if menuOpen}
 							<button
@@ -700,6 +687,18 @@
 	.icon-btn:hover {
 		color: var(--color-text);
 		border-color: var(--color-hairline-strong);
+	}
+	.wordmark {
+		font-family: var(--font-display);
+		font-variation-settings: 'wght' 600;
+		font-size: 22px;
+		letter-spacing: -0.02em;
+		line-height: 1;
+		color: var(--color-text-bright);
+		transition: opacity 160ms;
+	}
+	.wordmark:hover {
+		opacity: 0.85;
 	}
 	.add-btn {
 		display: inline-flex;

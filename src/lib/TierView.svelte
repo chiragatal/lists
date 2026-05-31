@@ -18,16 +18,14 @@
 		Tag,
 		Dices,
 		History,
-		Menu,
+		Settings,
 		Bookmark,
 		Library,
-		MoreHorizontal,
 		Pencil,
 		Trash2,
 		Check,
 		Users
 	} from './icons';
-	import { ui } from './ui.svelte';
 	import ItemEditor from './ItemEditor.svelte';
 	import ShareSheet from './ShareSheet.svelte';
 	import ItemCard from './ItemCard.svelte';
@@ -279,14 +277,7 @@
 			<!-- Top utility bar -->
 			<div class="mb-4 flex items-center justify-between gap-3">
 				<div class="flex min-w-0 items-center gap-2.5">
-					<button
-						type="button"
-						onclick={() => ui.openMenu()}
-						class="icon-btn shrink-0"
-						aria-label="Menu"
-					>
-						<Menu size={16} strokeWidth={1.5} />
-					</button>
+					<a href="/" class="wordmark shrink-0" aria-label="Home">Lists</a>
 					{#if renaming}
 						<input
 							type="text"
@@ -323,10 +314,10 @@
 							type="button"
 							onclick={() => (menuOpen = !menuOpen)}
 							class="icon-btn"
-							aria-label="Plan menu"
-							title="Plan menu"
+							aria-label="Plan settings"
+							title="Plan settings"
 						>
-							<MoreHorizontal size={16} strokeWidth={1.5} />
+							<Settings size={15} strokeWidth={1.5} />
 						</button>
 						{#if menuOpen}
 							<button
@@ -794,6 +785,18 @@
 	.icon-btn:hover {
 		color: var(--color-text);
 		border-color: var(--color-hairline-strong);
+	}
+	.wordmark {
+		font-family: var(--font-display);
+		font-variation-settings: 'wght' 600;
+		font-size: 22px;
+		letter-spacing: -0.02em;
+		line-height: 1;
+		color: var(--color-text-bright);
+		transition: opacity 160ms;
+	}
+	.wordmark:hover {
+		opacity: 0.85;
 	}
 
 	.add-btn {

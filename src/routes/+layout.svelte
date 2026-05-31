@@ -6,7 +6,6 @@
 	import { requestPersistentStorage } from '$lib/backup.svelte';
 	import { ui } from '$lib/ui.svelte';
 	import { lists } from '$lib/lists.svelte';
-	import NavDrawer from '$lib/NavDrawer.svelte';
 	import SettingsSheet from '$lib/SettingsSheet.svelte';
 
 	let { children } = $props();
@@ -90,7 +89,6 @@
 	{/if}
 </div>
 
-<NavDrawer />
 <SettingsSheet open={ui.settingsOpen} onClose={() => ui.closeSettings()} />
 
 <style>

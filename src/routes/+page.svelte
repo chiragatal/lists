@@ -9,7 +9,7 @@
 	} from '$lib/lists.svelte';
 	import { backup } from '$lib/backup.svelte';
 	import { ui } from '$lib/ui.svelte';
-	import { Menu, Plus, Crosshair, ListChecks, X } from '$lib/icons';
+	import { Settings, Plus, Crosshair, ListChecks, X } from '$lib/icons';
 
 	$effect(() => {
 		lists.loadIndex();
@@ -62,31 +62,26 @@
 	<div class="mx-auto max-w-xl px-5 pt-5 pb-12">
 		<header class="mb-5">
 			<div class="mb-4 flex items-center justify-between gap-3">
-				<div class="flex min-w-0 items-center gap-2.5">
+				<a href="/" class="wordmark shrink-0" aria-label="Home">Lists</a>
+				<div class="flex shrink-0 items-center gap-1.5">
+					<button type="button" onclick={startCreate} class="add-btn" aria-label="New list">
+						<Plus size={15} strokeWidth={2} />
+						<span>New</span>
+					</button>
 					<button
 						type="button"
-						onclick={() => ui.openMenu()}
-						class="icon-btn relative shrink-0"
-						aria-label="Menu"
-						title={backup.stale ? 'Menu — backup overdue' : 'Menu'}
+						onclick={() => ui.openSettings()}
+						class="icon-btn relative"
+						aria-label="Settings"
+						title={backup.stale ? 'Settings — backup overdue' : 'Settings'}
 					>
-						<Menu size={16} strokeWidth={1.5} />
+						<Settings size={15} strokeWidth={1.5} />
 						{#if backup.stale && lists.all.length > 0}
 							<span class="backup-dot" aria-hidden="true"></span>
 						{/if}
 					</button>
-					<span
-						class="truncate font-mono text-[10px] tracking-[0.24em] text-[var(--tier-color)] uppercase"
-					>
-						Lists
-					</span>
 				</div>
-				<button type="button" onclick={startCreate} class="add-btn" aria-label="New list">
-					<Plus size={15} strokeWidth={2} />
-					<span>New</span>
-				</button>
 			</div>
-			<h1 class="font-display text-5xl leading-[0.95] text-[var(--color-text-bright)]">Lists</h1>
 			<p class="mt-2 max-w-xs text-[13px] leading-snug text-[var(--color-muted)]">
 				Plans funnel things you might do; checklists tick through and reset.
 			</p>
@@ -259,6 +254,18 @@
 	.icon-btn:hover {
 		color: var(--color-text);
 		border-color: var(--color-hairline-strong);
+	}
+	.wordmark {
+		font-family: var(--font-display);
+		font-variation-settings: 'wght' 600;
+		font-size: 28px;
+		letter-spacing: -0.02em;
+		line-height: 1;
+		color: var(--color-text-bright);
+		transition: opacity 160ms;
+	}
+	.wordmark:hover {
+		opacity: 0.85;
 	}
 	.backup-dot {
 		position: absolute;
