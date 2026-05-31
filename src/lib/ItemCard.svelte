@@ -1,6 +1,5 @@
 <script lang="ts">
-	import type { Item, Tier } from './db';
-	import { setItemTier, tierOf } from './store.svelte';
+	import { lists, type Item, type Tier } from './lists.svelte';
 	import { Bookmark, Check, Crosshair, GripVertical, StickyNote } from './icons';
 
 	type Props = {
@@ -14,7 +13,7 @@
 
 	let { item, tier, onEdit, onTagTap, selectedTags, canEdit = true }: Props = $props();
 
-	const current = $derived(tierOf(item));
+	const current = $derived(item.tier ?? 'library');
 
 	function stop(e: Event) {
 		e.stopPropagation();
@@ -23,7 +22,8 @@
 	function go(next: Tier) {
 		return (e: MouseEvent) => {
 			stop(e);
-			setItemTier(item.id!, next);
+			const listId = lists.current?.id;
+			if (listId != null) lists.setTier(listId, item.id, next);
 		};
 	}
 </script>
@@ -73,7 +73,7 @@
 				</span>
 			{/if}
 		</div>
-		{#if item.tags.length}
+		{#if item.tags?.length}
 			<div class="mt-1.5 flex flex-wrap gap-1">
 				{#each item.tags as t}
 					{@const selected = selectedTags.includes(t)}

@@ -1,12 +1,11 @@
 <script lang="ts">
-	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import {
-		checklists,
-		groupItemsByCategory,
-		type ChecklistItem,
+		lists,
+		groupChecklistItemsByCategory as groupItemsByCategory,
+		type Item as ChecklistItem,
 		type ChecklistState
-	} from '$lib/checklists.svelte';
+	} from '$lib/lists.svelte';
 	import { dndzone, type DndEvent } from 'svelte-dnd-action';
 	import { flip } from 'svelte/animate';
 	import {
@@ -26,24 +25,25 @@
 	import ChecklistHistorySheet from '$lib/ChecklistHistorySheet.svelte';
 	import ShareSheet from '$lib/ShareSheet.svelte';
 
-	const id = $derived(Number(page.params.id));
+	type Props = { id: number };
+	let { id }: Props = $props();
 
 	$effect(() => {
-		checklists.loadDetail(id);
+		lists.ensureDetail(id);
 	});
 
-	const loading = $derived(checklists.detailLoading);
-	const cl = $derived(checklists.current);
-	const items = $derived(checklists.items);
-	const canEdit = $derived(checklists.canEdit);
-	const isOwner = $derived(checklists.currentRole === 'owner');
+	const loading = $derived(lists.detailLoading);
+	const cl = $derived(lists.current);
+	const items = $derived(lists.items);
+	const canEdit = $derived(lists.canEdit);
+	const isOwner = $derived(lists.currentRole === 'owner');
 	let shareOpen = $state(false);
 
 	async function handleLeave() {
 		menuOpen = false;
 		if (!confirm(`Leave "${cl?.name}"? You'll lose access until re-shared.`)) return;
-		await fetch(`/api/checklists/${id}/leave`, { method: 'POST' });
-		await goto('/checklists');
+		await fetch(`/api/lists/${id}/leave`, { method: 'POST' });
+		await goto('/');
 	}
 
 	type SortMode = 'in-place' | 'by-category' | 'by-status';
@@ -110,14 +110,17 @@
 			for (const it of g.done) fullIds.push(it.id);
 			for (const it of g.skipped) fullIds.push(it.id);
 		}
-		await checklists.reorderItems(id, fullIds);
+		await lists.reorderItems(id, fullIds);
 	}
 
 	function statusHeading(s: ChecklistState): string {
 		return s === 'pending' ? 'To do' : s === 'done' ? 'Done' : 'Skipped';
 	}
 
-	const counts = $derived(cl?.counts ?? { total: 0, done: 0, skipped: 0, pending: 0 });
+	const counts = $derived(
+		(cl?.counts as { total: number; done: number; skipped: number; pending: number } | undefined) ??
+			{ total: 0, done: 0, skipped: 0, pending: 0 }
+	);
 	const resolved = $derived(counts.done + counts.skipped);
 	const pct = $derived(counts.total === 0 ? 0 : Math.round((resolved / counts.total) * 100));
 
@@ -144,7 +147,7 @@
 
 	function toggle(item: ChecklistItem, target: ChecklistState) {
 		const next: ChecklistState = item.state === target ? 'pending' : target;
-		checklists.setItemState(id, item.id, next);
+		lists.setItemState(id, item.id, next);
 	}
 
 	function startAdd() {
@@ -158,7 +161,7 @@
 		if (!n || busy) return;
 		busy = true;
 		try {
-			await checklists.addItem(id, n, newCategory.trim());
+			await lists.addItem(id, { name: n, category: newCategory.trim(), state: 'pending' });
 			newName = '';
 			queueMicrotask(() => addInput?.focus());
 		} finally {
@@ -178,7 +181,7 @@
 			renaming = false;
 			return;
 		}
-		await checklists.renameChecklist(id, n);
+		await lists.renameList(id, n);
 		renaming = false;
 	}
 
@@ -186,14 +189,14 @@
 		menuOpen = false;
 		const label = mode === 'all' ? 'Reset everything to pending?' : 'Clear all done items back to pending? (skipped items stay)';
 		if (!confirm(label)) return;
-		await checklists.reset(id, mode);
+		await lists.reset(id, mode);
 	}
 
 	async function handleDelete() {
 		menuOpen = false;
 		if (!confirm(`Delete the checklist "${cl?.name}"? This removes all its items and history.`)) return;
-		await checklists.deleteChecklist(id);
-		await goto('/checklists');
+		await lists.deleteList(id);
+		await goto('/');
 	}
 
 	function openItemEdit(item: ChecklistItem) {
@@ -206,14 +209,14 @@
 		if (!editingItem) return;
 		const n = editName.trim();
 		if (!n) return;
-		await checklists.updateItem(id, editingItem.id, { name: n, category: editCategory.trim() });
+		await lists.updateItem(id, editingItem.id, { name: n, category: editCategory.trim() });
 		editingItem = null;
 	}
 
 	async function deleteEditingItem() {
 		if (!editingItem) return;
 		if (!confirm('Delete this item?')) return;
-		await checklists.deleteItem(id, editingItem.id);
+		await lists.deleteItem(id, editingItem.id);
 		editingItem = null;
 	}
 </script>
@@ -290,7 +293,7 @@
 						<span
 							class="shrink-0 rounded-full border border-[var(--color-hairline-strong)] px-1.5 py-0.5 font-mono text-[9px] tracking-[0.14em] text-[var(--color-muted)] uppercase"
 						>
-							{checklists.currentRole}
+							{lists.currentRole}
 						</span>
 					{/if}
 				</div>

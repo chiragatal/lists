@@ -2,10 +2,13 @@
 	import { dndzone, type DndEvent } from 'svelte-dnd-action';
 	import { flip } from 'svelte/animate';
 	import { fade } from 'svelte/transition';
-	import type { Item, Tier } from './db';
 	import { goto } from '$app/navigation';
-	import { itemsByTier, lists, reorderItems, clearActive } from './store.svelte';
-	import { plans } from './plans.svelte';
+	import {
+		itemsByTier,
+		lists,
+		type Item,
+		type Tier
+	} from './lists.svelte';
 	import { tierMeta, tierColorClass } from './tier';
 	import {
 		Plus,
@@ -42,12 +45,13 @@
 	const tierClass = $derived(tierColorClass(tier));
 
 	$effect(() => {
-		lists.ensurePlan(planId);
+		lists.ensureDetail(planId);
 	});
 
 	const items = $derived(itemsByTier(tier));
 	const totalCount = $derived(lists.items.length);
-	const isLoading = $derived(!lists.isLoaded || lists.currentPlanId !== planId);
+	const isLoading = $derived(lists.detailLoading || lists.current?.id !== planId);
+	const planName = $derived(lists.current?.name ?? '');
 
 	let query = $state('');
 	let categoryFilter = $state('');
@@ -70,32 +74,31 @@
 
 	async function handleLeave() {
 		menuOpen = false;
-		if (!confirm(`Leave "${lists.currentPlanName}"? You'll lose access until re-shared.`)) return;
-		await fetch(`/api/plans/${planId}/leave`, { method: 'POST' });
+		if (!confirm(`Leave "${planName}"? You'll lose access until re-shared.`)) return;
+		await fetch(`/api/lists/${planId}/leave`, { method: 'POST' });
 		await goto('/');
 	}
 
 	function startRename() {
 		menuOpen = false;
-		renameValue = lists.currentPlanName;
+		renameValue = planName;
 		renaming = true;
 	}
 	async function confirmRename() {
 		const n = renameValue.trim();
 		renaming = false;
-		if (!n || n === lists.currentPlanName) return;
-		await plans.renamePlan(planId, n);
-		lists.currentPlanName = n;
+		if (!n || n === planName) return;
+		await lists.renameList(planId, n);
 	}
 	async function handleClearActive() {
 		menuOpen = false;
 		if (!confirm('Clear everything from Active back to Library?')) return;
-		await clearActive();
+		await lists.clearActive(planId);
 	}
 	async function handleDeletePlan() {
 		menuOpen = false;
-		if (!confirm(`Delete the plan "${lists.currentPlanName}"? This removes all its items.`)) return;
-		await plans.deletePlan(planId);
+		if (!confirm(`Delete the plan "${planName}"? This removes all its items.`)) return;
+		await lists.deleteList(planId);
 		await goto('/');
 	}
 
@@ -103,7 +106,7 @@
 	function tagHits(it: Item): number {
 		if (!selectedTags.length) return 0;
 		let n = 0;
-		for (const t of selectedTags) if (it.tags.includes(t)) n++;
+		for (const t of selectedTags) if ((it.tags ?? []).includes(t)) n++;
 		return n;
 	}
 
@@ -114,7 +117,7 @@
 				if (
 					!it.name.toLowerCase().includes(q) &&
 					!it.category.toLowerCase().includes(q) &&
-					!it.tags.some((t) => t.toLowerCase().includes(q)) &&
+					!(it.tags ?? []).some((t) => t.toLowerCase().includes(q)) &&
 					!(it.notes ?? '').toLowerCase().includes(q)
 				)
 					return false;
@@ -122,9 +125,9 @@
 			if (categoryFilter && it.category !== categoryFilter) return false;
 			if (selectedTags.length) {
 				if (tagMatchMode === 'all') {
-					if (!selectedTags.every((t) => it.tags.includes(t))) return false;
+					if (!selectedTags.every((t) => (it.tags ?? []).includes(t))) return false;
 				} else {
-					if (!selectedTags.some((t) => it.tags.includes(t))) return false;
+					if (!selectedTags.some((t) => (it.tags ?? []).includes(t))) return false;
 				}
 			}
 			return true;
@@ -139,7 +142,7 @@
 
 	const tagCounts = $derived.by(() => {
 		const map = new Map<string, number>();
-		for (const it of items) for (const t of it.tags) map.set(t, (map.get(t) ?? 0) + 1);
+		for (const it of items) for (const t of it.tags ?? []) map.set(t, (map.get(t) ?? 0) + 1);
 		return [...map.entries()]
 			.map(([tag, count]) => ({ tag, count }))
 			.sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
@@ -179,7 +182,7 @@
 
 	function subgroupByCommonTag(list: Item[]): Subgroup[] {
 		const tagFreq = new Map<string, number>();
-		for (const it of list) for (const t of it.tags) tagFreq.set(t, (tagFreq.get(t) ?? 0) + 1);
+		for (const it of list) for (const t of it.tags ?? []) tagFreq.set(t, (tagFreq.get(t) ?? 0) + 1);
 
 		const sharedTags = [...tagFreq.entries()]
 			.filter(([, n]) => n >= 2)
@@ -192,7 +195,7 @@
 		const other: Item[] = [];
 
 		for (const it of list) {
-			const candidate = sharedTags.find((t) => it.tags.includes(t));
+			const candidate = sharedTags.find((t) => (it.tags ?? []).includes(t));
 			if (candidate) {
 				if (!buckets.has(candidate)) buckets.set(candidate, []);
 				buckets.get(candidate)!.push(it);
@@ -248,7 +251,7 @@
 	}
 	async function handleDndFinalize(e: CustomEvent<DndEvent<Item>>) {
 		dndList = e.detail.items;
-		await reorderItems(dndList.map((it) => it.id!));
+		await lists.reorderItems(planId, dndList.map((it) => it.id));
 	}
 
 	function cycleGrouping() {
@@ -297,7 +300,7 @@
 						/>
 					{:else}
 						<span class="truncate text-sm font-medium text-[var(--color-text-bright)]">
-							{lists.currentPlanName || 'Plan'}
+							{planName || 'Plan'}
 						</span>
 					{/if}
 					{#if !isOwner}
@@ -719,7 +722,7 @@
 	open={shareOpen}
 	objectType="plan"
 	objectId={planId}
-	title={lists.currentPlanName}
+	title={planName}
 	onClose={() => (shareOpen = false)}
 />
 

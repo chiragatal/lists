@@ -1,6 +1,5 @@
 <script lang="ts">
-	import type { Item } from './db';
-	import { lists } from './store.svelte';
+	import { lists, type Item } from './lists.svelte';
 	import { History, X } from './icons';
 
 	type Props = {
@@ -32,7 +31,7 @@
 	const tagCounts = $derived.by(() => {
 		const map = new Map<string, number>();
 		for (const e of allEvents) {
-			for (const t of e.item.tags) map.set(t, (map.get(t) ?? 0) + 1);
+			for (const t of e.item.tags ?? []) map.set(t, (map.get(t) ?? 0) + 1);
 		}
 		return [...map.entries()]
 			.map(([tag, count]) => ({ tag, count }))
@@ -44,7 +43,7 @@
 	const filtered = $derived.by(() => {
 		return allEvents.filter((e) => {
 			if (rangeDays && e.ts < cutoff) return false;
-			if (selectedTags.length && !selectedTags.some((t) => e.item.tags.includes(t))) return false;
+			if (selectedTags.length && !selectedTags.some((t) => (e.item.tags ?? []).includes(t))) return false;
 			return true;
 		});
 	});
@@ -242,7 +241,7 @@
 												</span>
 											{/if}
 										</div>
-										{#if e.item.tags.length}
+										{#if e.item.tags?.length}
 											<div class="mt-1 flex flex-wrap gap-1">
 												{#each e.item.tags as t}
 													<span

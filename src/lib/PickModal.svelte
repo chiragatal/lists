@@ -1,6 +1,5 @@
 <script lang="ts">
-	import type { Item, Tier } from './db';
-	import { setItemTier, tierOf } from './store.svelte';
+	import { lists, type Item, type Tier } from './lists.svelte';
 	import { tierColorClass } from './tier';
 	import { Bookmark, Check, Crosshair, Dices, Pencil, X } from './icons';
 
@@ -49,12 +48,13 @@
 
 	async function moveTo(next: Tier) {
 		if (!pick?.id) return;
-		await setItemTier(pick.id, next);
-		// Refresh the local pick so the in-modal current state reflects the new tier
-		pick = { ...pick, inShortlist: next === 'shortlist' ? 1 : 0, inActive: next === 'active' ? 1 : 0 };
+		const listId = lists.current?.id;
+		if (listId == null) return;
+		await lists.setTier(listId, pick.id, next);
+		pick = { ...pick, tier: next };
 	}
 
-	const pickCurrent = $derived(pick ? tierOf(pick) : 'library');
+	const pickCurrent = $derived(pick?.tier ?? 'library');
 </script>
 
 {#if open}
@@ -106,7 +106,7 @@
 					>
 						{pick.name}
 					</p>
-					{#if pick.tags.length}
+					{#if pick.tags?.length}
 						<div class="mt-3 flex flex-wrap justify-center gap-1">
 							{#each pick.tags as t}
 								<span

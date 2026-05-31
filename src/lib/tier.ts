@@ -1,4 +1,4 @@
-import type { Tier } from './db';
+import type { Tier } from './lists.svelte';
 
 export const TIERS: { id: Tier; label: string; subtitle: string; emptyHint: string }[] = [
 	{

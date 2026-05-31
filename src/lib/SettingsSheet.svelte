@@ -1,13 +1,6 @@
 <script lang="ts">
 	import { Download, Upload, Trash2, X, Pencil, Check } from './icons';
-	import {
-		exportAll,
-		importAll,
-		eraseAll,
-		renameCategory,
-		renameTag,
-		lists
-	} from './store.svelte';
+	import { exportAll, importAll, eraseAll, lists } from './lists.svelte';
 	import { backup } from './backup.svelte';
 
 	type Props = {
@@ -34,7 +27,7 @@
 	});
 	const tags = $derived.by(() => {
 		const map = new Map<string, number>();
-		for (const it of lists.items) for (const t of it.tags) map.set(t, (map.get(t) ?? 0) + 1);
+		for (const it of lists.items) for (const t of it.tags ?? []) map.set(t, (map.get(t) ?? 0) + 1);
 		return [...map.entries()]
 			.map(([name, count]) => ({ name, count }))
 			.sort((a, b) => a.name.localeCompare(b.name));
@@ -112,9 +105,14 @@
 			editing = null;
 			return;
 		}
+		const listId = lists.current?.id;
+		if (listId == null) {
+			editing = null;
+			return;
+		}
 		try {
 			if (editing.kind === 'category') {
-				const n = await renameCategory(editing.name, target);
+				const n = await lists.renameCategory(listId, editing.name, target);
 				const collidedWith = categories.find((c) => c.name === target && c.name !== editing!.name);
 				status = {
 					kind: 'success',
@@ -123,7 +121,7 @@
 						: `Renamed ${n} item${n === 1 ? '' : 's'}.`
 				};
 			} else {
-				const n = await renameTag(editing.name, target);
+				const n = await lists.renameTag(listId, editing.name, target);
 				const collidedWith = tags.find((t) => t.name === target && t.name !== editing!.name);
 				status = {
 					kind: 'success',

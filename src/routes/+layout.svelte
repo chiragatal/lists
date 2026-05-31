@@ -5,9 +5,7 @@
 	import { Bookmark, Crosshair, Library } from '$lib/icons';
 	import { requestPersistentStorage } from '$lib/backup.svelte';
 	import { ui } from '$lib/ui.svelte';
-	import { lists } from '$lib/store.svelte';
-	import { plans } from '$lib/plans.svelte';
-	import { checklists } from '$lib/checklists.svelte';
+	import { lists } from '$lib/lists.svelte';
 	import NavDrawer from '$lib/NavDrawer.svelte';
 	import SettingsSheet from '$lib/SettingsSheet.svelte';
 
@@ -15,38 +13,38 @@
 
 	onMount(() => {
 		requestPersistentStorage();
-		// Login gate runs server-side; if we reached a page, we're authed.
 		if (page.url.pathname.startsWith('/login')) return;
-		// Warm the drawer data in parallel so it opens instantly, fully populated.
+		// Warm shared data so the drawer opens instantly.
 		lists.loadUser();
-		if (!plans.loaded && !plans.loading) plans.loadIndex();
-		if (!checklists.indexLoaded && !checklists.indexLoading) checklists.loadIndex();
+		if (!lists.indexLoaded && !lists.indexLoading) lists.loadIndex();
 	});
 
-	// The bottom nav shows only inside a plan, scoped to that plan's tiers.
-	const planMatch = $derived(page.url.pathname.match(/^\/plans\/(\d+)(\/(shortlist|library))?\/?$/));
-	const planId = $derived(planMatch ? planMatch[1] : null);
-	const subTier = $derived(planMatch ? (planMatch[3] ?? 'active') : null);
+	// Bottom nav shows only inside a plan list (Active / Shortlist / Library tabs).
+	const listMatch = $derived(page.url.pathname.match(/^\/lists\/(\d+)(\/(shortlist|library))?\/?$/));
+	const listId = $derived(listMatch ? listMatch[1] : null);
+	const subTier = $derived(listMatch ? (listMatch[3] ?? 'active') : null);
+	const currentList = $derived(listId ? lists.all.find((l) => l.id === Number(listId)) : null);
+	const isPlan = $derived(currentList?.type === 'plan');
 
 	const tabs = $derived(
-		planId
+		listId && isPlan
 			? [
 					{
-						href: `/plans/${planId}`,
+						href: `/lists/${listId}`,
 						label: 'Active',
 						active: subTier === 'active',
 						Icon: Crosshair,
 						tone: 'emerald'
 					},
 					{
-						href: `/plans/${planId}/shortlist`,
+						href: `/lists/${listId}/shortlist`,
 						label: 'Shortlist',
 						active: subTier === 'shortlist',
 						Icon: Bookmark,
 						tone: 'amber'
 					},
 					{
-						href: `/plans/${planId}/library`,
+						href: `/lists/${listId}/library`,
 						label: 'Library',
 						active: subTier === 'library',
 						Icon: Library,
@@ -56,7 +54,7 @@
 			: []
 	);
 
-	const hideNav = $derived(!planId);
+	const hideNav = $derived(tabs.length === 0);
 </script>
 
 <div class="flex min-h-dvh flex-col">

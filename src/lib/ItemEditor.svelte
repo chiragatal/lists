@@ -1,14 +1,5 @@
 <script lang="ts">
-	import type { Item, Tier } from './db';
-	import {
-		addItem,
-		updateItem,
-		deleteItem,
-		allCategories,
-		tagsForCategory,
-		tierOf,
-		removeCompletion
-	} from './store.svelte';
+	import { lists, allCategories, tagsForCategory, type Item, type Tier } from './lists.svelte';
 	import { Trash2, X, Bookmark, Crosshair, Library, Check } from './icons';
 
 	type Props = {
@@ -38,9 +29,9 @@
 		if (item) {
 			name = item.name;
 			category = item.category;
-			tagsText = item.tags.join(', ');
+			tagsText = (item.tags ?? []).join(', ');
 			notes = item.notes ?? '';
-			placement = tierOf(item);
+			placement = item.tier ?? 'library';
 			completedAt = [...(item.completedAt ?? [])];
 		} else {
 			name = '';
@@ -75,21 +66,30 @@
 		const n = name.trim();
 		const c = category.trim();
 		if (!n || !c) return;
+		const listId = lists.current?.id;
+		if (listId == null) return;
 		saving = true;
 		try {
 			const tags = parseTags(tagsText);
 			const trimmedNotes = notes.trim();
 			if (item?.id != null) {
-				await updateItem(item.id, {
+				await lists.updateItem(listId, item.id, {
 					name: n,
 					category: c,
 					tags,
-					notes: (trimmedNotes || null) as string | undefined,
-					inShortlist: placement === 'shortlist' ? 1 : 0,
-					inActive: placement === 'active' ? 1 : 0
+					notes: trimmedNotes || null
 				});
+				if (placement !== (item.tier ?? 'library')) {
+					await lists.setTier(listId, item.id, placement);
+				}
 			} else {
-				await addItem({ name: n, category: c, tags, notes: trimmedNotes, tier: placement });
+				await lists.addItem(listId, {
+					name: n,
+					category: c,
+					tags,
+					notes: trimmedNotes,
+					tier: placement
+				});
 			}
 			onClose();
 		} finally {
@@ -98,8 +98,9 @@
 	}
 
 	async function remove() {
-		if (item?.id != null && confirm('Delete this item permanently?')) {
-			await deleteItem(item.id);
+		const listId = lists.current?.id;
+		if (item?.id != null && listId != null && confirm('Delete this item permanently?')) {
+			await lists.deleteItem(listId, item.id);
 			onClose();
 		}
 	}
@@ -111,7 +112,8 @@
 
 	async function removeEntry(ts: number) {
 		completedAt = completedAt.filter((t) => t !== ts);
-		if (item?.id != null) await removeCompletion(item.id, ts);
+		const listId = lists.current?.id;
+		if (item?.id != null && listId != null) await lists.removeCompletion(listId, item.id, ts);
 	}
 
 	function formatCompletion(ts: number): { rel: string; abs: string } {

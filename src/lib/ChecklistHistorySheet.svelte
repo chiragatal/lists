@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { checklists, type Snapshot } from './checklists.svelte';
+	import { lists, type Snapshot } from './lists.svelte';
 	import { History, X, Trash2 } from './icons';
 
 	type Props = {
@@ -17,7 +17,7 @@
 	$effect(() => {
 		if (!open) return;
 		loading = true;
-		checklists
+		lists
 			.loadHistory(checklistId)
 			.then((s) => (snapshots = s))
 			.finally(() => (loading = false));
@@ -43,7 +43,7 @@
 		if (!confirm('Delete this history entry?')) return;
 		deleting = snapshotId;
 		try {
-			await checklists.deleteSnapshot(checklistId, snapshotId);
+			await lists.deleteSnapshot(checklistId, snapshotId);
 			snapshots = snapshots.filter((s) => s.id !== snapshotId);
 			if (expanded === snapshotId) expanded = null;
 		} finally {

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Item } from './db';
+	import type { Item } from './lists.svelte';
 
 	type Props = {
 		items: Item[];
