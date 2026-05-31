@@ -675,8 +675,7 @@
 
 <ShareSheet
 	open={shareOpen}
-	objectType="checklist"
-	objectId={id}
+	listId={id}
 	title={cl?.name ?? 'Checklist'}
 	onClose={() => (shareOpen = false)}
 />

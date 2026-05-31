@@ -720,8 +720,7 @@
 
 <ShareSheet
 	open={shareOpen}
-	objectType="plan"
-	objectId={planId}
+	listId={planId}
 	title={planName}
 	onClose={() => (shareOpen = false)}
 />

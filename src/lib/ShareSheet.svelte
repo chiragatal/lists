@@ -5,15 +5,14 @@
 
 	type Props = {
 		open: boolean;
-		objectType: 'plan' | 'checklist';
-		objectId: number;
+		listId: number;
 		title: string;
 		onClose: () => void;
 	};
 
-	let { open, objectType, objectId, title, onClose }: Props = $props();
+	let { open, listId, title, onClose }: Props = $props();
 
-	const base = $derived(`/api/${objectType === 'plan' ? 'plans' : 'checklists'}/${objectId}/shares`);
+	const base = $derived(`/api/lists/${listId}/shares`);
 
 	let members = $state<Member[]>([]);
 	let loading = $state(false);
