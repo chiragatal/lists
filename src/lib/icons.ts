@@ -9,6 +9,7 @@ export {
 	Download,
 	GripVertical,
 	History,
+	Home,
 	LayoutList,
 	Library,
 	ListChecks,

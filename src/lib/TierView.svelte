@@ -18,6 +18,7 @@
 		Tag,
 		Dices,
 		History,
+		Home,
 		Settings,
 		Bookmark,
 		Library,
@@ -26,6 +27,11 @@
 		Check,
 		Users
 	} from './icons';
+
+	function goHome() {
+		if (typeof localStorage !== 'undefined') localStorage.removeItem('lists:lastList');
+		goto('/');
+	}
 	import ItemEditor from './ItemEditor.svelte';
 	import ShareSheet from './ShareSheet.svelte';
 	import ItemCard from './ItemCard.svelte';
@@ -277,7 +283,15 @@
 			<!-- Top utility bar -->
 			<div class="mb-4 flex items-center justify-between gap-3">
 				<div class="flex min-w-0 items-center gap-2.5">
-					<a href="/" class="wordmark shrink-0" aria-label="Home">Lists</a>
+					<button
+						type="button"
+						onclick={goHome}
+						class="icon-btn shrink-0"
+						aria-label="Home"
+						title="Home"
+					>
+						<Home size={16} strokeWidth={1.5} />
+					</button>
 					{#if renaming}
 						<input
 							type="text"

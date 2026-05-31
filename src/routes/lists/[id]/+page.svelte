@@ -8,6 +8,9 @@
 
 	$effect(() => {
 		lists.ensureDetail(id);
+		if (typeof localStorage !== 'undefined' && Number.isFinite(id)) {
+			localStorage.setItem('lists:lastList', String(id));
+		}
 	});
 
 	const type = $derived(lists.current?.type);

@@ -11,6 +11,7 @@
 	import {
 		Plus,
 		Settings,
+		Home,
 		History,
 		Trash2,
 		Pencil,
@@ -20,6 +21,11 @@
 		LayoutList,
 		Users
 	} from '$lib/icons';
+
+	function goHome() {
+		if (typeof localStorage !== 'undefined') localStorage.removeItem('lists:lastList');
+		goto('/');
+	}
 	import ChecklistHistorySheet from '$lib/ChecklistHistorySheet.svelte';
 	import ShareSheet from '$lib/ShareSheet.svelte';
 
@@ -274,7 +280,15 @@
 		<header class="mb-5">
 			<div class="mb-4 flex items-center justify-between gap-3">
 				<div class="flex min-w-0 items-center gap-2.5">
-					<a href="/" class="wordmark shrink-0" aria-label="Home">Lists</a>
+					<button
+						type="button"
+						onclick={goHome}
+						class="icon-btn shrink-0"
+						aria-label="Home"
+						title="Home"
+					>
+						<Home size={16} strokeWidth={1.5} />
+					</button>
 					{#if !isOwner}
 						<span
 							class="shrink-0 rounded-full border border-[var(--color-hairline-strong)] px-1.5 py-0.5 font-mono text-[9px] tracking-[0.14em] text-[var(--color-muted)] uppercase"
